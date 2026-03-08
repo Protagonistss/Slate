@@ -12,6 +12,7 @@
 .header-left {
   display: flex;
   align-items: center;
+  gap: 16px;
 }
 
 .header-logo {
@@ -25,6 +26,25 @@
   font-size: 16px;
   font-weight: 600;
   color: #e0e0e0;
+}
+
+.header-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-action-btn:hover {
+  background: #2d2d2d;
+  border-color: #4c4c4c;
 }
 
 .header-center {
@@ -116,4 +136,34 @@
 .header-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #e0e0e0;
+}
+
+/* Window Controls */
+.window-controls {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.window-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 48px;
+  background: transparent;
+  border: none;
+  color: #9d9d9d;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.window-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+}
+
+.window-btn.close:hover {
+  background: #e81123;
+  color: #fff;
 }

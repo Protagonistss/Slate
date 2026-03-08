@@ -2,7 +2,9 @@
  * Tauri HTTP API 封装
  */
 
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+const isTauri =
+  typeof window !== 'undefined' &&
+  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
 export interface FetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';

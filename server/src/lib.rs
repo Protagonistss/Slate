@@ -2,8 +2,6 @@
 
 mod commands;
 
-use tauri::Manager;
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -15,6 +13,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_system_info,
             commands::get_installed_tools,
+            commands::read_workspace_dir,
+            commands::read_workspace_text_file,
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())

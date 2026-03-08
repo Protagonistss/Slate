@@ -1,13 +1,39 @@
 import React from 'react';
-import { useUIStore, useConfigStore } from '../../stores';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { useUIStore, useConfigStore, useWorkspaceStore } from '../../stores';
+import { openFolderDialog } from '../../services/tauri/dialog';
 import './Header.css';
 
 export const Header: React.FC = () => {
   const { mode, setMode, openSettings } = useUIStore();
   const { currentProvider } = useConfigStore();
+  const { openWorkspace, workspacePath } = useWorkspaceStore();
+
+  const handleOpenFolder = async () => {
+    const selectedPath = await openFolderDialog();
+    if (selectedPath) {
+      await openWorkspace(selectedPath);
+    }
+  };
+
+  const handleMinimize = () => {
+    getCurrentWindow().minimize();
+  };
+
+  const handleMaximize = () => {
+    getCurrentWindow().toggleMaximize();
+  };
+
+  const handleClose = () => {
+    getCurrentWindow().close();
+  };
 
   return (
-    <header className="header">
+    <header className="header" onMouseDown={(e) => {
+      // 只在非按钮区域拖动
+      if ((e.target as HTMLElement).closest('button')) return;
+      getCurrentWindow().startDragging();
+    }}>
       <div className="header-left">
         <div className="header-logo">
           <svg viewBox="0 0 24 24" width="24" height="24">
@@ -18,6 +44,17 @@ export const Header: React.FC = () => {
           </svg>
           <span className="header-title">Protagonist Agent</span>
         </div>
+        {mode === 'editor' && (
+          <button className="header-action-btn" onClick={handleOpenFolder} title="打开文件夹">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path
+                fill="currentColor"
+                d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"
+              />
+            </svg>
+            <span>{workspacePath ? '切换文件夹' : '打开文件夹'}</span>
+          </button>
+        )}
       </div>
 
       <div className="header-center">
@@ -62,6 +99,23 @@ export const Header: React.FC = () => {
             />
           </svg>
         </button>
+        <div className="window-controls">
+          <button className="window-btn minimize" onClick={handleMinimize} title="最小化">
+            <svg viewBox="0 0 24 24" width="12" height="12">
+              <path fill="currentColor" d="M19 13H5v-2h14v2z" />
+            </svg>
+          </button>
+          <button className="window-btn maximize" onClick={handleMaximize} title="最大化">
+            <svg viewBox="0 0 24 24" width="12" height="12">
+              <path fill="currentColor" d="M4 4h16v16H4V4zm2 2v12h12V6H6z" />
+            </svg>
+          </button>
+          <button className="window-btn close" onClick={handleClose} title="关闭">
+            <svg viewBox="0 0 24 24" width="12" height="12">
+              <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z" />
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
   );

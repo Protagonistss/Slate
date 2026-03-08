@@ -69,41 +69,115 @@ export function joinPath(...parts: string[]): string {
  */
 export function getLanguageFromExtension(extension: string): string {
   const languageMap: Record<string, string> = {
+    // JavaScript/TypeScript
     js: 'javascript',
     jsx: 'javascript',
     ts: 'typescript',
     tsx: 'typescript',
+    mjs: 'javascript',
+    cjs: 'javascript',
+
+    // Python
     py: 'python',
-    rb: 'ruby',
-    java: 'java',
-    go: 'go',
-    rs: 'rust',
-    c: 'c',
-    cpp: 'cpp',
-    h: 'c',
-    hpp: 'cpp',
-    cs: 'csharp',
-    swift: 'swift',
-    kt: 'kotlin',
-    scala: 'scala',
-    php: 'php',
+    pyw: 'python',
+    pyx: 'python',
+
+    // Web
     html: 'html',
     htm: 'html',
     css: 'css',
     scss: 'scss',
     less: 'less',
+    sass: 'scss',
+
+    // Vue/Svelte/Angular
+    vue: 'vue',
+    svelte: 'svelte',
+
+    // Data formats
     json: 'json',
     xml: 'xml',
     yaml: 'yaml',
     yml: 'yaml',
+    toml: 'ini',
+    ini: 'ini',
+    env: 'plaintext',
+
+    // Markup
     md: 'markdown',
-    sql: 'sql',
+    mdx: 'markdown',
+    rst: 'restructuredtext',
+
+    // Systems programming
+    c: 'c',
+    h: 'c',
+    cpp: 'cpp',
+    hpp: 'cpp',
+    cc: 'cpp',
+    cxx: 'cpp',
+    rs: 'rust',
+    go: 'go',
+    zig: 'zig',
+
+    // JVM
+    java: 'java',
+    kt: 'kotlin',
+    kts: 'kotlin',
+    scala: 'scala',
+    groovy: 'groovy',
+
+    // .NET
+    cs: 'csharp',
+    vb: 'vb',
+    fs: 'fsharp',
+
+    // Scripting
     sh: 'shell',
     bash: 'shell',
+    zsh: 'shell',
     ps1: 'powershell',
+    ps: 'powershell',
+    bat: 'bat',
+    cmd: 'bat',
+    rb: 'ruby',
+    lua: 'lua',
+    pl: 'perl',
+    pm: 'perl',
+
+    // Functional
+    hs: 'haskell',
+    elm: 'elm',
+    ex: 'elixir',
+    exs: 'elixir',
+    erl: 'erlang',
+
+    // Mobile
+    swift: 'swift',
+    m: 'objective-c',
+    mm: 'objective-cpp',
+
+    // Database
+    sql: 'sql',
+
+    // Config
     dockerfile: 'dockerfile',
-    vue: 'vue',
-    svelte: 'svelte',
+    makefile: 'makefile',
+    cmake: 'cmake',
+
+    // Other
+    php: 'php',
+    r: 'r',
+    dart: 'dart',
+    clj: 'clojure',
+    cljs: 'clojure',
+    coffee: 'coffeescript',
+    sol: 'solidity',
+    graphql: 'graphql',
+    gql: 'graphql',
+
+    // Text
+    txt: 'plaintext',
+    log: 'plaintext',
   };
 
   return languageMap[extension.toLowerCase()] || 'plaintext';
