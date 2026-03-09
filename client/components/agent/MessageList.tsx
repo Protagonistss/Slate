@@ -19,7 +19,7 @@ export const MessageList: React.FC = () => {
               />
             </svg>
           </div>
-          <h2>欢迎使用 Protagonist Agent</h2>
+          <h2>欢迎使用 Slate</h2>
           <p>我是一个智能代码助手，可以帮你：</p>
           <ul>
             <li>编写和修改代码</li>

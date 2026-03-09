@@ -33,8 +33,8 @@ export interface MonacoEditorRef {
   getLanguage: () => string;
 }
 
-const defaultCode = `// Protagonist Agent
-// 智能代码助手
+const defaultCode = `// Slate Editor
+// AI-powered code editor
 
 function greet(name: string) {
   console.log(\`Hello, \${name}!\`);

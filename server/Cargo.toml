@@ -1,14 +1,14 @@
 [package]
-name = "and"
+name = "slate"
 version = "0.1.0"
-description = "Protagonist Agent - 智能代码助手"
+description = "Slate Editor - AI-powered code editor"
 authors = ["you"]
 license = ""
 repository = ""
 edition = "2021"
 
 [lib]
-name = "and_lib"
+name = "slate_lib"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
