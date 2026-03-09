@@ -46,3 +46,16 @@ export interface MCPServer {
     url?: string;
   };
 }
+
+export interface ProjectRecord {
+  path: string;
+  name: string;
+  lastOpened: string;
+  openFiles: string[];
+  hasConfig: boolean;
+}
+
+export interface ProjectsConfig {
+  recentProjects: ProjectRecord[];
+  currentProject?: string;
+}

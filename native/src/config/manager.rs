@@ -6,6 +6,7 @@ use dirs::home_dir;
 pub struct ConfigManager {
     user_config_dir: PathBuf,
     project_config_dir: Option<PathBuf>,
+    projects_config: ProjectsConfig,
 }
 
 impl ConfigManager {
@@ -21,9 +22,13 @@ impl ConfigManager {
         // 创建默认配置文件（如果不存在）
         Self::create_default_configs(&user_config_dir)?;
 
+        // 读取 projects.json
+        let projects_config = Self::load_projects_config(&user_config_dir)?;
+
         Ok(Self {
             user_config_dir,
             project_config_dir: None,
+            projects_config,
         })
     }
 
@@ -31,6 +36,82 @@ impl ConfigManager {
         // 只记录项目配置目录路径，不主动创建
         // 项目配置文件仅在用户手动添加时才创建
         self.project_config_dir = Some(path.join(".slate"));
+    }
+
+    fn load_projects_config(dir: &PathBuf) -> Result<ProjectsConfig, String> {
+        let path = dir.join("projects.json");
+        if !path.exists() {
+            return Ok(ProjectsConfig::default());
+        }
+        let content = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read projects.json: {}", e))?;
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse projects.json: {}", e))
+    }
+
+    fn save_projects_config(&mut self) -> Result<(), String> {
+        let path = self.user_config_dir.join("projects.json");
+        let content = serde_json::to_string_pretty(&self.projects_config)
+            .map_err(|e| format!("Failed to serialize projects: {}", e))?;
+        fs::write(&path, content)
+            .map_err(|e| format!("Failed to write projects: {}", e))?;
+        Ok(())
+    }
+
+    pub fn set_and_record_project(&mut self, path: &Path) -> Result<(), String> {
+        let project_path = path.to_string_lossy().to_string();
+        let project_name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+
+        // 检查是否有项目配置
+        let has_config = path.join(".slate/config.json").exists();
+
+        // 更新或添加项目记录
+        let record = ProjectRecord {
+            path: project_path.clone(),
+            name: project_name.clone(),
+            last_opened: chrono::Utc::now().to_rfc3339(),
+            open_files: Vec::new(),
+            has_config,
+        };
+
+        self.projects_config.recent_projects
+            .retain(|p| p.path != project_path);
+        self.projects_config.recent_projects.insert(0, record);
+
+        // 只保留最近 20 个项目
+        if self.projects_config.recent_projects.len() > 20 {
+            self.projects_config.recent_projects.truncate(20);
+        }
+
+        self.projects_config.current_project = Some(project_path.clone());
+        self.project_config_dir = Some(path.join(".slate"));
+
+        self.save_projects_config()?;
+        Ok(())
+    }
+
+    pub fn get_recent_projects(&self) -> &[ProjectRecord] {
+        &self.projects_config.recent_projects
+    }
+
+    pub fn get_current_project(&self) -> Option<&str> {
+        self.projects_config.current_project.as_deref()
+    }
+
+    pub fn remove_project(&mut self, path: &str) -> Result<(), String> {
+        self.projects_config.recent_projects
+            .retain(|p| p.path != path);
+
+        // 如果删除的是当前项目，清除当前项目
+        if self.projects_config.current_project.as_deref() == Some(path) {
+            self.projects_config.current_project = None;
+        }
+
+        self.save_projects_config()?;
+        Ok(())
     }
 
     fn create_default_configs(dir: &PathBuf) -> Result<(), String> {

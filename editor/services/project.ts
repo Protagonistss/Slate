@@ -191,3 +191,32 @@ export function findEntryFiles(project: ProjectInfo): ProjectFile[] {
   findRecursive(project.rootFiles);
   return entryFiles;
 }
+
+// 从指定路径打开项目（用于恢复上次项目）
+export async function openProjectByPath(projectPath: string): Promise<ProjectInfo | null> {
+  try {
+    console.log('[openProjectByPath] Starting to open project:', projectPath);
+
+    // 检查路径是否存在
+    const entries = await invoke<WorkspaceDirEntry[]>('read_workspace_dir', { path: projectPath });
+    console.log('[openProjectByPath] Directory entries found:', entries.length);
+
+    // 获取目录名称作为项目名
+    const projectName = projectPath.split(/[/\\]/).filter(Boolean).pop() || 'Untitled Project';
+
+    console.log('[openProjectByPath] Project name:', projectName);
+
+    // 扫描项目文件
+    const rootFiles = await scanDirectory(projectPath);
+    console.log('[openProjectByPath] Root files scanned:', rootFiles.length);
+
+    return {
+      path: projectPath,
+      name: projectName,
+      rootFiles,
+    };
+  } catch (error) {
+    console.error('[openProjectByPath] Failed to open project by path:', error);
+    return null;
+  }
+}

@@ -20,11 +20,15 @@ pub fn run() {
             commands::update_settings,
             commands::get_config_path,
             commands::open_config_folder,
+            commands::set_project_dir,
+            commands::get_recent_projects,
+            commands::remove_recent_project,
+            commands::get_current_project_path,
         ])
         .setup(|app| {
             let manager = config::ConfigManager::new()
                 .map_err(|e| e.to_string())?;
-            app.manage(manager);
+            app.manage(std::sync::Mutex::new(manager));
             Ok(())
         })
         .run(tauri::generate_context!())

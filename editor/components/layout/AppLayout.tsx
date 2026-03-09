@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TopBar } from "./TopBar";
 import { ProjectFileTree } from "./ProjectFileTree";
 import {
@@ -25,8 +25,20 @@ export function AppLayout() {
   const navigate = useNavigate();
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
-  const { openProject, closeProject } = useProjectStore();
+  const { openProject, closeProject, restoreLastProject } = useProjectStore();
   const { closeAllFiles } = useEditorStore();
+
+  // 应用启动时恢复上次的项目
+  useEffect(() => {
+    const restoreProject = async () => {
+      const restored = await restoreLastProject();
+      // 如果成功恢复了项目，且当前在首页，则导航到编辑器
+      if (restored && location.pathname === '/') {
+        navigate('/editor');
+      }
+    };
+    restoreProject();
+  }, []);
 
   const currentMode = location.pathname.includes("agent") ? "agent" : location.pathname.includes("editor") ? "editor" : "home";
 

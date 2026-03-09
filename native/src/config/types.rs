@@ -151,3 +151,53 @@ impl Default for Config {
         }
     }
 }
+
+// 项目管理类型
+/// 项目记录信息
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProjectRecord {
+    pub path: String,
+    pub name: String,
+    #[serde(default)]
+    pub last_opened: String,
+    #[serde(default)]
+    pub open_files: Vec<String>,
+    #[serde(default)]
+    pub has_config: bool,
+}
+
+/// 项目列表配置
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ProjectsConfig {
+    #[serde(default)]
+    pub recent_projects: Vec<ProjectRecord>,
+    #[serde(default)]
+    pub current_project: Option<String>,
+}
+
+/// 项目级配置
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ProjectConfig {
+    #[serde(default)]
+    pub llm: Option<LLMSettings>,
+    #[serde(default)]
+    pub editor: Option<ProjectEditorSettings>,
+    #[serde(default)]
+    pub workspace: Option<ProjectWorkspaceSettings>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ProjectEditorSettings {
+    #[serde(default = "default_tab_size")]
+    pub tab_size: u8,
+    #[serde(default)]
+    pub word_wrap: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ProjectWorkspaceSettings {
+    #[serde(default)]
+    pub default_directory: String,
+    #[serde(default)]
+    pub exclude_patterns: Vec<String>,
+}
