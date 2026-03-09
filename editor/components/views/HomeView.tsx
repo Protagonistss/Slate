@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   PencilLine,
   Bot,
@@ -12,9 +12,18 @@ import { useProjectStore, useEditorStore } from "@/stores";
 
 export function HomeView() {
   const navigate = useNavigate();
-  const { openProject, closeProject } = useProjectStore();
+  const { openProject, closeProject, currentProject } = useProjectStore();
   const { closeAllFiles } = useEditorStore();
   const [isOpeningProject, setIsOpeningProject] = useState(false);
+  const hasInitialized = useRef(false);
+
+  // 首次加载时检查是否有项目，如果有则导航到编辑器
+  useEffect(() => {
+    if (!hasInitialized.current && currentProject) {
+      hasInitialized.current = true;
+      navigate("/editor", { replace: true });
+    }
+  }, [currentProject, navigate]);
 
   const handleNewProject = async () => {
     setIsOpeningProject(true);
