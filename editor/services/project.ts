@@ -166,30 +166,42 @@ export async function openProjectFolder(): Promise<ProjectInfo | null> {
   }
 }
 
-// 查找项目的主要入口文件
+// 查找项目的主要入口文件（按优先级返回单个入口文件）
 export function findEntryFiles(project: ProjectInfo): ProjectFile[] {
-  const entryFiles: ProjectFile[] = [];
-
-  function findRecursive(files: ProjectFile[]) {
+  // 扁平化所有文件列表
+  function flattenFiles(files: ProjectFile[]): ProjectFile[] {
+    const result: ProjectFile[] = [];
     for (const file of files) {
       if (file.type === 'file') {
-        // 查找常见的入口文件
-        if (file.name === 'index.html' ||
-            file.name === 'main.tsx' ||
-            file.name === 'App.tsx' ||
-            file.name === 'index.tsx' ||
-            file.name === 'main.js' ||
-            file.name === 'App.js') {
-          entryFiles.push(file);
-        }
+        result.push(file);
       } else if (file.children) {
-        findRecursive(file.children);
+        result.push(...flattenFiles(file.children));
       }
+    }
+    return result;
+  }
+
+  const allFiles = flattenFiles(project.rootFiles);
+
+  // 按优先级排序的入口文件名
+  const priorityEntryFiles = [
+    'index.tsx', 'index.jsx',
+    'main.tsx', 'main.jsx',
+    'App.tsx', 'App.jsx',
+    'index.ts', 'index.js',
+    'main.ts', 'main.js',
+    'index.html'
+  ];
+
+  // 按优先级查找第一个匹配的文件
+  for (const entryName of priorityEntryFiles) {
+    const found = allFiles.find(file => file.name === entryName);
+    if (found) {
+      return [found];
     }
   }
 
-  findRecursive(project.rootFiles);
-  return entryFiles;
+  return [];
 }
 
 // 从指定路径打开项目（用于恢复上次项目）

@@ -177,7 +177,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
         tabSize: 2,
         renderWhitespace: 'selection',
         cursorBlinking: 'smooth',
-        smoothScrolling: true,
+        smoothScrolling: false,
         padding: { top: 12 },
       });
 
