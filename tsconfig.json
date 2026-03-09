@@ -18,8 +18,8 @@
     "strictNullChecks": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./client/*"]
+      "@/*": ["./editor/*"]
     }
   },
-  "include": ["client"]
+  "include": ["editor"]
 }

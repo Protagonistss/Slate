@@ -19,47 +19,47 @@
 
 ### Phase 1: 项目目录重构 ✅
 
-- [x] 重命名 `src/` → `client/`
-- [x] 重命名 `src-tauri/` → `server/`
-- [x] 更新 `vite.config.ts` - 设置 root 为 client
+- [x] 重命名 `src/` → `editor/`
+- [x] 重命名 `src-tauri/` → `native/`
+- [x] 更新 `vite.config.ts` - 设置 root 为 editor
 - [x] 更新 `tsconfig.json` - 更新 include 路径
-- [x] 更新 `index.html` - 移动到 client 目录
-- [x] 更新 `server/tauri.conf.json` - 更新窗口配置
+- [x] 更新 `index.html` - 移动到 editor 目录
+- [x] 更新 `native/tauri.conf.json` - 更新窗口配置
 
 ### Phase 2: 安装依赖和配置 Tauri 插件 ✅
 
 - [x] 安装前端依赖: zustand, uuid, date-fns
 - [x] 安装 Tauri 插件: @tauri-apps/plugin-fs, shell, http, store, dialog
 - [x] 安装类型定义: @types/uuid
-- [x] 更新 `server/Cargo.toml` - 添加 Rust 依赖
-- [x] 更新 `server/capabilities/default.json` - 添加权限配置
-- [x] 更新 `server/src/lib.rs` - 注册插件和命令
-- [x] 创建 `server/src/commands/` 模块
+- [x] 更新 `native/Cargo.toml` - 添加 Rust 依赖
+- [x] 更新 `native/capabilities/default.json` - 添加权限配置
+- [x] 更新 `native/src/lib.rs` - 注册插件和命令
+- [x] 创建 `native/src/commands/` 模块
 
 ### Phase 3: 实现 LLM 适配器层 ✅
 
-- [x] `client/services/llm/types.ts` - LLM 类型定义
-- [x] `client/services/llm/BaseAdapter.ts` - 基础适配器
-- [x] `client/services/llm/OpenAIAdapter.ts` - OpenAI 适配器
-- [x] `client/services/llm/AnthropicAdapter.ts` - Anthropic 适配器
-- [x] `client/services/llm/OllamaAdapter.ts` - Ollama 适配器
-- [x] `client/services/llm/LLMFactory.ts` - 适配器工厂
-- [x] `client/services/llm/index.ts` - 导出文件
+- [x] `editor/services/llm/types.ts` - LLM 类型定义
+- [x] `editor/services/llm/BaseAdapter.ts` - 基础适配器
+- [x] `editor/services/llm/OpenAIAdapter.ts` - OpenAI 适配器
+- [x] `editor/services/llm/AnthropicAdapter.ts` - Anthropic 适配器
+- [x] `editor/services/llm/OllamaAdapter.ts` - Ollama 适配器
+- [x] `editor/services/llm/LLMFactory.ts` - 适配器工厂
+- [x] `editor/services/llm/index.ts` - 导出文件
 
 ### Phase 4: 实现工具系统 ✅
 
-- [x] `client/services/tools/types.ts` - 工具类型定义
-- [x] `client/services/tools/ToolRegistry.ts` - 工具注册表
-- [x] `client/services/tools/index.ts` - 工具导出
+- [x] `editor/services/tools/types.ts` - 工具类型定义
+- [x] `editor/services/tools/ToolRegistry.ts` - 工具注册表
+- [x] `editor/services/tools/index.ts` - 工具导出
 
 ### Phase 5: 实现状态管理 ✅
 
-- [x] `client/stores/index.ts` - Store 导出
-- [x] `client/stores/agentStore.ts` - Agent 核心状态
-- [x] `client/stores/editorStore.ts` - 编辑器状态
-- [x] `client/stores/conversationStore.ts` - 会话/消息状态
-- [x] `client/stores/configStore.ts` - 配置状态
-- [x] `client/stores/uiStore.ts` - UI 状态
+- [x] `editor/stores/index.ts` - Store 导出
+- [x] `editor/stores/agentStore.ts` - Agent 核心状态
+- [x] `editor/stores/editorStore.ts` - 编辑器状态
+- [x] `editor/stores/conversationStore.ts` - 会话/消息状态
+- [x] `editor/stores/configStore.ts` - 配置状态
+- [x] `editor/stores/uiStore.ts` - UI 状态
 
 ### Phase 6: 实现 UI 组件 ✅
 
@@ -71,24 +71,24 @@
 
 ### Phase 7: 实现 Server 后端 ✅
 
-- [x] `server/src/commands/mod.rs` - 命令模块入口
-- [x] `server/src/commands/system.rs` - 系统信息命令
-- [x] `server/src/commands/tools.rs` - 工具检测命令
+- [x] `native/src/commands/mod.rs` - 命令模块入口
+- [x] `native/src/commands/system.rs` - 系统信息命令
+- [x] `native/src/commands/tools.rs` - 工具检测命令
 
 ### Phase 8: 实现持久化存储 ✅
 
-- [x] `client/services/tauri/store.ts` - Tauri 存储封装
+- [x] `editor/services/tauri/store.ts` - Tauri 存储封装
 - [x] Zustand persist middleware 已集成
 
 ### 其他完成项 ✅
 
-- [x] `client/types/` - 类型定义
-- [x] `client/constants/` - 常量定义
-- [x] `client/hooks/` - 自定义 Hooks
-- [x] `client/utils/` - 工具函数
-- [x] `client/services/tauri/` - Tauri API 封装
-- [x] `client/App.tsx` - 主应用组件
-- [x] `client/App.css` - 全局样式
+- [x] `editor/types/` - 类型定义
+- [x] `editor/constants/` - 常量定义
+- [x] `editor/hooks/` - 自定义 Hooks
+- [x] `editor/utils/` - 工具函数
+- [x] `editor/services/tauri/` - Tauri API 封装
+- [x] `editor/App.tsx` - 主应用组件
+- [x] `editor/App.css` - 全局样式
 
 ---
 
@@ -96,7 +96,7 @@
 
 ```
 E:\code\Protagonistss\and\
-├── client/                         # 前端源码
+├── editor/                         # 编辑器前端源码
 │   ├── main.tsx                    # 入口文件
 │   ├── App.tsx                     # 主应用组件
 │   ├── App.css                     # 全局样式
@@ -122,7 +122,7 @@ E:\code\Protagonistss\and\
 │   ├── types/                      # 类型定义
 │   └── constants/                  # 常量
 │
-├── server/                         # Tauri 后端
+├── native/                         # Tauri 原生后端
 │   ├── src/
 │   │   ├── main.rs                 # 入口
 │   │   ├── lib.rs                  # 库入口

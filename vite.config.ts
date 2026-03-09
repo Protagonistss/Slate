@@ -5,11 +5,11 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  root: "client",
+  root: "editor",
   clearScreen: false,
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./client"),
+      "@": path.resolve(__dirname, "./editor"),
     },
   },
   server: {
