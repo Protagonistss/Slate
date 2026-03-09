@@ -8,21 +8,33 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useProjectStore } from "@/stores";
+import { useProjectStore, useEditorStore } from "@/stores";
 
 export function HomeView() {
   const navigate = useNavigate();
-  const { openProject } = useProjectStore();
+  const { openProject, closeProject } = useProjectStore();
+  const { closeAllFiles } = useEditorStore();
   const [isOpeningProject, setIsOpeningProject] = useState(false);
 
   const handleNewProject = async () => {
     setIsOpeningProject(true);
     try {
       console.log('[HomeView] Opening project...');
+
+      // 先关闭当前项目并清除所有打开的文件
+      closeProject();
+      closeAllFiles();
+
       await openProject();
-      console.log('[HomeView] Project opened, navigating to /editor');
-      // 项目打开成功，导航到编辑器
-      navigate("/editor");
+
+      // 检查是否成功打开了项目
+      const { currentProject } = useProjectStore.getState();
+      if (currentProject) {
+        console.log('[HomeView] Project opened, navigating to /editor');
+        navigate("/editor");
+      } else {
+        console.log('[HomeView] No project selected, staying on home');
+      }
     } catch (error) {
       console.error("Failed to open project:", error);
     } finally {
