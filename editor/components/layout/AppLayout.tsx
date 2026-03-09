@@ -25,6 +25,7 @@ export function AppLayout() {
   const navigate = useNavigate();
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(true);
   const { openProject, closeProject, restoreLastProject } = useProjectStore();
   const { closeAllFiles } = useEditorStore();
 
@@ -32,15 +33,20 @@ export function AppLayout() {
   useEffect(() => {
     const restoreProject = async () => {
       const restored = await restoreLastProject();
+      setIsRestoring(false);
       // 如果成功恢复了项目，且当前在首页，则导航到编辑器
       if (restored && location.pathname === '/') {
-        navigate('/editor');
+        navigate('/editor', { replace: true });
       }
     };
     restoreProject();
   }, []);
 
-  const currentMode = location.pathname.includes("agent") ? "agent" : location.pathname.includes("editor") ? "editor" : "home";
+  const currentMode: "home" | "editor" | "agent" = location.pathname.includes("agent")
+    ? "agent"
+    : location.pathname.includes("editor")
+    ? "editor"
+    : "home";
 
   // 打开新项目的处理函数
   const handleNewProject = async () => {
@@ -76,26 +82,24 @@ export function AppLayout() {
                     {currentMode !== "editor" && (
                       <section>
                         <div className="space-y-1">
-                          {currentMode !== "agent" && (
-                            <NavItem
-                              icon={Home}
-                              label="Home"
-                              active={currentMode === "home"}
-                              onClick={() => navigate("/")}
-                            />
-                          )}
-                          {currentMode !== "agent" && (
+                          {currentMode === "home" && (
                             <>
+                              <NavItem
+                                icon={Home}
+                                label="Home"
+                                active={currentMode === "home"}
+                                onClick={() => navigate("/")}
+                              />
                               <NavItem
                                 icon={PencilLine}
                                 label="New Project"
-                                active={currentMode === "editor"}
+                                active={false}
                                 onClick={handleNewProject}
                               />
                               <NavItem
                                 icon={Bot}
                                 label="New Agent"
-                                active={currentMode === "agent"}
+                                active={false}
                                 onClick={() => navigate("/agent")}
                               />
                             </>
@@ -148,18 +152,28 @@ export function AppLayout() {
             <main className="h-full relative overflow-hidden">
               <div className="absolute inset-0 bg-[#0a0a0a] rounded-xl sm:rounded-2xl border border-white/[0.04] shadow-[0_0_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden m-0.5 sm:m-2 lg:m-4">
                 <div className="h-full w-full overflow-hidden relative rounded-xl sm:rounded-2xl flex flex-col">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={location.pathname}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <Outlet />
-                    </motion.div>
-                  </AnimatePresence>
+                  {/* 显示加载状态 */}
+                  {isRestoring && location.pathname === '/' ? (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="w-8 h-8 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+                        <span className="text-sm text-zinc-500">恢复项目...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={location.pathname}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className="h-full w-full"
+                      >
+                        <Outlet />
+                      </motion.div>
+                    </AnimatePresence>
+                  )}
                 </div>
               </div>
             </main>
@@ -219,7 +233,7 @@ export function AppLayout() {
 
 // Helper components
 interface NavItemProps {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   label: string;
   active?: boolean;
   onClick?: () => void;

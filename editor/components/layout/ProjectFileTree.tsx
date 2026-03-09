@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ export function ProjectFileTree({ className }: ProjectFileTreeProps) {
   const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
 
   const { currentProject, projectFiles } = useProjectStore();
-  const { openFiles, activeFilePath } = useEditorStore();
+  const { openFiles, activeFilePath, setActiveFile, openFile } = useEditorStore();
 
   const toggleFolder = (path: string) => {
     setExpandedFolders(prev => {
@@ -41,7 +41,6 @@ export function ProjectFileTree({ className }: ProjectFileTreeProps) {
     } else {
       // 如果文件已经在打开的标签页中，直接激活
       if (openFiles.some(f => f.path === file.path)) {
-        const { setActiveFile } = useEditorStore.getState();
         setActiveFile(file.path);
         return;
       }
@@ -52,7 +51,6 @@ export function ProjectFileTree({ className }: ProjectFileTreeProps) {
         const fullFilePath = await join(currentProject!.path, file.path.replace(/\//g, '\\'));
         const content = await invoke<string>('read_workspace_text_file', { path: fullFilePath });
 
-        const { openFile } = useEditorStore.getState();
         openFile(file.path, file.name, content, file.language);
       } catch (error) {
         console.error('Failed to load file:', file.path, error);
@@ -114,7 +112,7 @@ interface FileTreeItemProps {
   isLoading?: (file: ProjectFile) => boolean;
 }
 
-function FileTreeItem({
+const FileTreeItem = memo(function FileTreeItem({
   file,
   level = 0,
   onFileClick,
@@ -182,4 +180,4 @@ function FileTreeItem({
       )}
     </div>
   );
-}
+});

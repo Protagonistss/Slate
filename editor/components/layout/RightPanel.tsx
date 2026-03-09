@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { SimpleLogo } from "../shared";
 
 interface SuggestionCardProps {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   title: string;
   desc: string;
   variant?: "blue" | "purple" | "green";

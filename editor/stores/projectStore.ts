@@ -8,7 +8,7 @@ import { setProjectDir, getCurrentProjectPath } from '../services/config';
 // Re-export types for convenience
 export type { ProjectInfo, ProjectFile } from '../services/project';
 
-interface ProjectState {
+export interface ProjectState {
   currentProject: ProjectInfo | null;
   projectFiles: ProjectFile[];
   isInitialized: boolean;

@@ -1,4 +1,5 @@
 use super::types::*;
+use super::error::ConfigError;
 use std::path::{Path, PathBuf};
 use std::fs;
 use dirs::home_dir;
@@ -10,14 +11,13 @@ pub struct ConfigManager {
 }
 
 impl ConfigManager {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self, ConfigError> {
         let user_config_dir = home_dir()
-            .ok_or("Cannot find home directory")?
+            .ok_or(ConfigError::HomeDirNotFound)?
             .join(".slate");
 
         // 创建用户配置目录
-        fs::create_dir_all(&user_config_dir)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+        fs::create_dir_all(&user_config_dir)?;
 
         // 创建默认配置文件（如果不存在）
         Self::create_default_configs(&user_config_dir)?;
@@ -38,27 +38,23 @@ impl ConfigManager {
         self.project_config_dir = Some(path.join(".slate"));
     }
 
-    fn load_projects_config(dir: &PathBuf) -> Result<ProjectsConfig, String> {
+    fn load_projects_config(dir: &PathBuf) -> Result<ProjectsConfig, ConfigError> {
         let path = dir.join("projects.json");
         if !path.exists() {
             return Ok(ProjectsConfig::default());
         }
-        let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read projects.json: {}", e))?;
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse projects.json: {}", e))
+        let content = fs::read_to_string(&path)?;
+        Ok(serde_json::from_str(&content)?)
     }
 
-    fn save_projects_config(&mut self) -> Result<(), String> {
+    fn save_projects_config(&mut self) -> Result<(), ConfigError> {
         let path = self.user_config_dir.join("projects.json");
-        let content = serde_json::to_string_pretty(&self.projects_config)
-            .map_err(|e| format!("Failed to serialize projects: {}", e))?;
-        fs::write(&path, content)
-            .map_err(|e| format!("Failed to write projects: {}", e))?;
+        let content = serde_json::to_string_pretty(&self.projects_config)?;
+        fs::write(&path, content)?;
         Ok(())
     }
 
-    pub fn set_and_record_project(&mut self, path: &Path) -> Result<(), String> {
+    pub fn set_and_record_project(&mut self, path: &Path) -> Result<(), ConfigError> {
         let project_path = path.to_string_lossy().to_string();
         let project_name = path.file_name()
             .and_then(|n| n.to_str())
@@ -101,7 +97,7 @@ impl ConfigManager {
         self.projects_config.current_project.as_deref()
     }
 
-    pub fn remove_project(&mut self, path: &str) -> Result<(), String> {
+    pub fn remove_project(&mut self, path: &str) -> Result<(), ConfigError> {
         self.projects_config.recent_projects
             .retain(|p| p.path != path);
 
@@ -114,25 +110,21 @@ impl ConfigManager {
         Ok(())
     }
 
-    fn create_default_configs(dir: &PathBuf) -> Result<(), String> {
+    fn create_default_configs(dir: &PathBuf) -> Result<(), ConfigError> {
         // settings.json - 首次启动时创建
         let settings_path = dir.join("settings.json");
         if !settings_path.exists() {
             let default_settings = Settings::default();
-            let content = serde_json::to_string_pretty(&default_settings)
-                .map_err(|e| format!("Failed to serialize settings: {}", e))?;
-            fs::write(&settings_path, content)
-                .map_err(|e| format!("Failed to write settings: {}", e))?;
+            let content = serde_json::to_string_pretty(&default_settings)?;
+            fs::write(&settings_path, content)?;
         }
 
         // config.json - 首次启动时创建
         let config_path = dir.join("config.json");
         if !config_path.exists() {
             let default_config = Config::default();
-            let content = serde_json::to_string_pretty(&default_config)
-                .map_err(|e| format!("Failed to serialize config: {}", e))?;
-            fs::write(&config_path, content)
-                .map_err(|e| format!("Failed to write config: {}", e))?;
+            let content = serde_json::to_string_pretty(&default_config)?;
+            fs::write(&config_path, content)?;
         }
 
         // mcp.json - 按需创建，不在首次启动时创建
@@ -140,7 +132,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub fn get_merged_config(&self) -> Result<MergedConfig, String> {
+    pub fn get_merged_config(&self) -> Result<MergedConfig, ConfigError> {
         // 读取用户配置
         let settings: Settings = self.read_json("settings.json")?;
         let config: Config = self.read_json("config.json")?;
@@ -157,7 +149,7 @@ impl ConfigManager {
         })
     }
 
-    fn read_json_optional<T>(&self, filename: &str) -> Result<T, String>
+    fn read_json_optional<T>(&self, filename: &str) -> Result<T, ConfigError>
     where
         T: for<'de> serde::Deserialize<'de> + Default,
     {
@@ -165,29 +157,23 @@ impl ConfigManager {
         if !path.exists() {
             return Ok(T::default());
         }
-        let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse {}: {}", filename, e))
+        let content = fs::read_to_string(&path)?;
+        Ok(serde_json::from_str(&content)?)
     }
 
-    fn read_json<T>(&self, filename: &str) -> Result<T, String>
+    fn read_json<T>(&self, filename: &str) -> Result<T, ConfigError>
     where
         T: for<'de> serde::Deserialize<'de>,
     {
         let path = self.user_config_dir.join(filename);
-        let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse {}: {}", filename, e))
+        let content = fs::read_to_string(&path)?;
+        Ok(serde_json::from_str(&content)?)
     }
 
-    pub fn save_settings(&self, settings: &Settings) -> Result<(), String> {
+    pub fn save_settings(&self, settings: &Settings) -> Result<(), ConfigError> {
         let path = self.user_config_dir.join("settings.json");
-        let content = serde_json::to_string_pretty(settings)
-            .map_err(|e| format!("Failed to serialize: {}", e))?;
-        fs::write(&path, content)
-            .map_err(|e| format!("Failed to write: {}", e))?;
+        let content = serde_json::to_string_pretty(settings)?;
+        fs::write(&path, content)?;
         Ok(())
     }
 

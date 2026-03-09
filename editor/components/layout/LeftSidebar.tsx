@@ -25,7 +25,7 @@ interface FileItemProps {
 
 interface NavItem {
   id: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   label: string;
   action?: () => void;
 }
@@ -36,7 +36,7 @@ export function LeftSidebar() {
   const navigate = useNavigate();
 
   const { currentProject, projectFiles } = useProjectStore();
-  const { openFile, openTabs } = useEditorStore();
+  const { openFile, openFiles, activeFilePath } = useEditorStore();
 
   const navItems: NavItem[] = [
     { id: "files", icon: Files, label: "Files" },
@@ -71,7 +71,7 @@ export function LeftSidebar() {
   };
 
   const isFileActive = (file: ProjectFile) => {
-    return openTabs.some(tab => tab.path === file.path && tab.isActive);
+    return activeFilePath === file.path;
   };
 
   return (

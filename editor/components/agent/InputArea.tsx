@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAgentStore, useConversationStore } from '../../stores';
 import { Button } from '../common';
 import './InputArea.css';
@@ -17,7 +17,7 @@ export const InputArea: React.FC = () => {
     }
   }, [input]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (!input.trim() || isProcessing) return;
 
     const message = input.trim();
@@ -29,14 +29,14 @@ export const InputArea: React.FC = () => {
     }
 
     await sendMessage(message);
-  };
+  }, [input, isProcessing, currentConversationId, createConversation, sendMessage]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
-  };
+  }, [handleSubmit]);
 
   return (
     <div className="input-area">

@@ -2,6 +2,7 @@
 
 mod config;
 mod commands;
+mod utils;
 
 use tauri::Manager;
 

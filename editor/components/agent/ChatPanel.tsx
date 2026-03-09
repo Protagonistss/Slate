@@ -6,14 +6,17 @@ import { LoadingDots } from '../common';
 import './ChatPanel.css';
 
 export const ChatPanel: React.FC = () => {
-  const { currentConversationId, createConversation } = useConversationStore();
+  const { currentConversationId, createConversation, getCurrentConversation } = useConversationStore();
   const { status, error, clearError } = useAgentStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 自动滚动到底部
+  // 获取当前会话（用于监听消息变化）
+  const conversation = getCurrentConversation();
+
+  // 自动滚动到底部 - 当消息数量变化时滚动
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
+  }, [conversation?.messages.length]);
 
   // 确保有当前会话
   useEffect(() => {

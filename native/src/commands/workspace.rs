@@ -38,7 +38,12 @@ pub async fn read_workspace_dir(path: String) -> Result<Vec<WorkspaceDirEntry>, 
 
 #[tauri::command]
 pub async fn read_workspace_text_file(path: String) -> Result<String, String> {
-    let file_path = PathBuf::from(&path);
-    fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read text file '{}': {}", file_path.display(), e))
+    // 使用 spawn_blocking 避免阻塞异步运行时
+    tokio::task::spawn_blocking(move || {
+        let file_path = PathBuf::from(&path);
+        fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read text file '{}': {}", file_path.display(), e))
+    })
+    .await
+    .map_err(|e| format!("Task execution failed: {}", e))?
 }

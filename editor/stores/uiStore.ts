@@ -64,6 +64,8 @@ export interface ConfirmModal {
 }
 
 let confirmResolve: ((value: boolean) => void) | null = null;
+// 存储定时器引用以便清理
+const toastTimers = new Map<string, NodeJS.Timeout>();
 
 export const useUIStore = create<UIState>((set, get) => ({
   mode: 'agent',
@@ -109,16 +111,25 @@ export const useUIStore = create<UIState>((set, get) => ({
     // 自动移除
     const duration = toast.duration ?? 3000;
     if (duration > 0) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         get().removeToast(id);
       }, duration);
+      // 存储定时器引用以便清理
+      toastTimers.set(id, timer);
     }
   },
 
-  removeToast: (id) =>
+  removeToast: (id) => {
+    // 清理定时器
+    const timer = toastTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimers.delete(id);
+    }
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
-    })),
+    }));
+  },
 
   showConfirm: (modal) => {
     return new Promise((resolve) => {

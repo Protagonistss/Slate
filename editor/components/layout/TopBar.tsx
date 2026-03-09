@@ -151,7 +151,7 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
 
 interface ModeButtonProps {
   isActive: boolean;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
   label: string;
   onClick: () => void;
 }

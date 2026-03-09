@@ -4,7 +4,6 @@ import './MessageItem.css';
 
 interface MessageItemProps {
   message: Message;
-  index: number;
 }
 
 const UserIcon: React.FC = () => (
@@ -62,13 +61,16 @@ const renderContent = (content: string | ContentBlock[]): React.ReactNode => {
         const match = part.match(/```(\w+)?\n?([\s\S]*?)```/);
         if (match) {
           const [, language, code] = match;
-          return <CodeBlock key={index} code={code.trim()} language={language} />;
+          // 使用内容和语言生成唯一 key
+          const key = `code-${index}-${code.slice(0, 10)}`;
+          return <CodeBlock key={key} code={code.trim()} language={language} />;
         }
       }
 
-      // 处理普通文本
+      // 处理普通文本 - 使用内容和索引生成唯一 key
+      const textKey = `text-${index}-${part.slice(0, 10)}`;
       return (
-        <span key={index} className="text-content">
+        <span key={textKey} className="text-content">
           {part}
         </span>
       );
@@ -78,11 +80,11 @@ const renderContent = (content: string | ContentBlock[]): React.ReactNode => {
   // 处理多内容块
   return content.map((block, index) => {
     if (block.type === 'text') {
-      return <span key={index}>{block.text}</span>;
+      return <span key={`text-${index}-${block.text.slice(0, 10)}`}>{block.text}</span>;
     }
     if (block.type === 'tool_result') {
       return (
-        <div key={index} className="tool-result">
+        <div key={`tool-${index}-${block.tool_use_id}`} className="tool-result">
           <strong>Tool Result:</strong>
           <pre>{block.content}</pre>
         </div>

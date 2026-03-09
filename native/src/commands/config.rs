@@ -1,4 +1,5 @@
 use crate::config::{ConfigManager, ProjectRecord};
+use crate::utils::validate_project_path;
 use tauri::{AppHandle, State};
 use tauri_plugin_shell::ShellExt;
 use std::path::PathBuf;
@@ -9,6 +10,7 @@ pub async fn get_config(
     manager: State<'_, Mutex<ConfigManager>>,
 ) -> Result<crate::config::MergedConfig, String> {
     manager.lock().unwrap().get_merged_config()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -17,6 +19,7 @@ pub async fn update_settings(
     settings: crate::config::Settings,
 ) -> Result<(), String> {
     manager.lock().unwrap().save_settings(&settings)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -42,8 +45,12 @@ pub async fn set_project_dir(
     manager: State<'_, Mutex<ConfigManager>>,
     path: String,
 ) -> Result<(), String> {
+    // 验证路径
+    validate_project_path(&path)?;
+
     let path = PathBuf::from(path);
     manager.lock().unwrap().set_and_record_project(&path)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -59,6 +66,7 @@ pub async fn remove_recent_project(
     path: String,
 ) -> Result<(), String> {
     manager.lock().unwrap().remove_project(&path)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
