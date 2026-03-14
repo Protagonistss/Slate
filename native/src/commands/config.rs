@@ -1,4 +1,5 @@
 use crate::config::{ConfigManager, ProjectRecord};
+use crate::mcp::McpManager;
 use crate::utils::validate_project_path;
 use tauri::{AppHandle, State};
 use tauri_plugin_shell::ShellExt;
@@ -43,14 +44,22 @@ pub async fn open_config_folder(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn set_project_dir(
     manager: State<'_, Mutex<ConfigManager>>,
+    mcp_manager: State<'_, McpManager>,
     path: String,
 ) -> Result<(), String> {
     // 验证路径
     validate_project_path(&path)?;
 
     let path = PathBuf::from(path);
-    manager.lock().unwrap().set_and_record_project(&path)
-        .map_err(|e| e.to_string())
+    let effective_servers = {
+        let mut manager = manager.lock().unwrap();
+        manager.set_and_record_project(&path)
+            .map_err(|e| e.to_string())?;
+        manager.get_effective_mcp_servers()
+            .map_err(|e| e.to_string())?
+    };
+
+    mcp_manager.apply_servers(effective_servers).await
 }
 
 #[tauri::command]

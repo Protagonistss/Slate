@@ -4,4 +4,3 @@ pub mod error;
 
 pub use manager::{ConfigManager, MergedConfig};
 pub use types::*;
-pub use error::ConfigError;

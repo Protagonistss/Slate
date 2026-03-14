@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
@@ -108,7 +109,7 @@ fn default_provider() -> String {
 // MCP 类型
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct MCPConfig {
-    #[serde(default)]
+    #[serde(default, alias = "servers")]
     pub mcp_servers: Vec<MCPServer>,
 }
 
@@ -118,6 +119,12 @@ pub struct MCPServer {
     pub name: String,
     pub enabled: bool,
     pub transport: MCPTransport,
+    #[serde(default)]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    #[serde(default)]
+    pub approval_fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

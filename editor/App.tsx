@@ -6,20 +6,23 @@ import { EditorView } from "./components/views/EditorView";
 import { AgentView } from "./components/views/AgentView";
 import { SettingsView } from "./components/views/SettingsView";
 import { useProjectStore } from "@/stores/projectStore";
+import { useMcpStore } from "@/stores";
 
 function App() {
   const [isReady, setIsReady] = useState(false);
   const { restoreLastProject } = useProjectStore();
+  const { initialize: initializeMcp } = useMcpStore();
 
   useEffect(() => {
     const initialize = async () => {
       // 恢复上次的项目
       await restoreLastProject();
+      await initializeMcp();
       setIsReady(true);
     };
 
     initialize();
-  }, []);
+  }, [initializeMcp, restoreLastProject]);
 
   if (!isReady) {
     return (

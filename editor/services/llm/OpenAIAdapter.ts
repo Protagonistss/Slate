@@ -72,6 +72,11 @@ export class OpenAIAdapter extends BaseAdapter {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      const pendingToolCalls = new Map<number, {
+        id: string;
+        name: string;
+        arguments: string;
+      }>();
 
       while (true) {
         const { done, value } = await reader.read();
@@ -92,6 +97,7 @@ export class OpenAIAdapter extends BaseAdapter {
             try {
               const parsed = JSON.parse(data);
               const delta = parsed.choices?.[0]?.delta;
+              const finishReason = parsed.choices?.[0]?.finish_reason;
 
               if (delta?.content) {
                 yield { type: 'content', content: delta.content };
@@ -99,17 +105,34 @@ export class OpenAIAdapter extends BaseAdapter {
 
               if (delta?.tool_calls) {
                 for (const toolCall of delta.tool_calls) {
-                  if (toolCall.function?.name) {
-                    yield {
-                      type: 'tool_use',
-                      toolUse: {
-                        id: toolCall.id,
-                        name: toolCall.function.name,
-                        input: JSON.parse(toolCall.function.arguments || '{}'),
-                      },
-                    };
-                  }
+                  const index = toolCall.index ?? 0;
+                  const current = pendingToolCalls.get(index) || {
+                    id: '',
+                    name: '',
+                    arguments: '',
+                  };
+
+                  pendingToolCalls.set(index, {
+                    id: toolCall.id || current.id,
+                    name: toolCall.function?.name || current.name,
+                    arguments: current.arguments + (toolCall.function?.arguments || ''),
+                  });
                 }
+              }
+
+              if (finishReason === 'tool_calls') {
+                for (const toolCall of Array.from(pendingToolCalls.values())) {
+                  if (!toolCall.name) continue;
+                  yield {
+                    type: 'tool_use',
+                    toolUse: {
+                      id: toolCall.id,
+                      name: toolCall.name,
+                      input: JSON.parse(toolCall.arguments || '{}'),
+                    },
+                  };
+                }
+                pendingToolCalls.clear();
               }
             } catch {
               // 忽略解析错误
@@ -175,30 +198,84 @@ export class OpenAIAdapter extends BaseAdapter {
 
   // 格式化消息为 OpenAI 格式
   private formatMessages(messages: Message[]): unknown[] {
-    return messages.map((msg) => {
-      if (typeof msg.content === 'string') {
-        return { role: msg.role, content: msg.content };
+    const formatted: unknown[] = [];
+
+    for (const message of messages) {
+      if (typeof message.content === 'string') {
+        formatted.push({ role: message.role, content: message.content });
+        continue;
       }
 
-      // 处理多内容块
-      const content = (msg.content as unknown[]).map((block: unknown) => {
-        const b = block as { type: string; text?: string; source?: { data: string; media_type: string } };
-        if (b.type === 'text') {
-          return { type: 'text', text: b.text };
-        }
-        if (b.type === 'image') {
-          return {
-            type: 'image_url',
-            image_url: {
-              url: `data:${b.source?.media_type};base64,${b.source?.data}`,
-            },
-          };
-        }
-        return b;
-      });
+      const textBlocks = message.content.filter((block) => block.type === 'text');
+      const toolUseBlocks = message.content.filter((block) => block.type === 'tool_use');
+      const toolResultBlocks = message.content.filter((block) => block.type === 'tool_result');
+      const imageBlocks = message.content.filter((block) => block.type === 'image');
 
-      return { role: msg.role, content };
-    });
+      if (message.role === 'assistant' && toolUseBlocks.length > 0) {
+        formatted.push({
+          role: 'assistant',
+          content: textBlocks
+            .map((block) => ('text' in block ? block.text : ''))
+            .join('') || null,
+          tool_calls: toolUseBlocks.map((block) => ({
+            id: block.id,
+            type: 'function',
+            function: {
+              name: block.name,
+              arguments: JSON.stringify(block.input),
+            },
+          })),
+        });
+        continue;
+      }
+
+      if (message.role === 'user' && toolResultBlocks.length > 0) {
+        const textContent = textBlocks
+          .map((block) => ('text' in block ? block.text : ''))
+          .join('');
+
+        if (textContent) {
+          formatted.push({ role: 'user', content: textContent });
+        }
+
+        for (const block of toolResultBlocks) {
+          formatted.push({
+            role: 'tool',
+            tool_call_id: block.tool_use_id,
+            content: block.content,
+          });
+        }
+        continue;
+      }
+
+      if (imageBlocks.length > 0) {
+        formatted.push({
+          role: message.role,
+          content: [
+            ...textBlocks.map((block) => ({
+              type: 'text',
+              text: ('text' in block ? block.text : ''),
+            })),
+            ...imageBlocks.map((block) => ({
+              type: 'image_url',
+              image_url: {
+                url: `data:${block.source.media_type};base64,${block.source.data}`,
+              },
+            })),
+          ],
+        });
+        continue;
+      }
+
+      formatted.push({
+        role: message.role,
+        content: textBlocks
+          .map((block) => ('text' in block ? block.text : ''))
+          .join(''),
+      });
+    }
+
+    return formatted;
   }
 
   // 格式化工具定义为 OpenAI 格式

@@ -88,3 +88,23 @@ export async function saveFileDialog(
     return null;
   }
 }
+
+/**
+ * 打开确认对话框
+ */
+export async function confirmDialog(
+  message: string,
+  title = '确认操作'
+): Promise<boolean> {
+  if (!isTauri) {
+    return window.confirm(message);
+  }
+
+  try {
+    const { confirm } = await import('@tauri-apps/plugin-dialog');
+    return confirm(message, { title, kind: 'warning' });
+  } catch (error) {
+    console.error('Failed to open confirm dialog:', error);
+    return false;
+  }
+}

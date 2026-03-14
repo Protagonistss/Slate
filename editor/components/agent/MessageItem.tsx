@@ -90,6 +90,14 @@ const renderContent = (content: string | ContentBlock[]): React.ReactNode => {
         </div>
       );
     }
+    if (block.type === 'tool_use') {
+      return (
+        <div key={`tool-use-${index}-${block.id}`} className="tool-result">
+          <strong>Tool Call:</strong>
+          <pre>{`${block.name}\n${JSON.stringify(block.input, null, 2)}`}</pre>
+        </div>
+      );
+    }
     return null;
   });
 };

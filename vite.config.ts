@@ -18,10 +18,13 @@ export default defineConfig({
   },
   build: {
     outDir: "../dist",
-    emptyDir: true,
+    emptyOutDir: true,
     target: ["es2021", "chrome100"],
     minify: !process.env.TAURI_DEBUG,
     sourcemap: !!process.env.TAURI_DEBUG,
+    // Monaco workers bundle the language services and are expected to be much larger
+    // than Vite's default 500 kB warning threshold.
+    chunkSizeWarningLimit: 6500,
     rollupOptions: {
       output: {
         manualChunks: (id) => {

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { ProjectInfo, ProjectFile } from '../services/project';
 import { openProjectFolder, openProjectByPath } from '../services/project';
 import { setProjectDir, getCurrentProjectPath } from '../services/config';
+import { useConfigStore } from './configStore';
+import { useEditorStore } from './editorStore';
 
 // Re-export types for convenience
 export type { ProjectInfo, ProjectFile } from '../services/project';
@@ -30,7 +32,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await setProjectDir(project.path);
 
     // 同步更新 configStore.workingDirectory（供 Agent 使用）
-    const { useConfigStore } = await import('./configStore');
     useConfigStore.getState().setWorkingDirectory(project.path);
 
     set({
@@ -39,7 +40,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
 
     // 关闭所有现有文件（为项目切换做准备）
-    const { useEditorStore } = await import('../stores/editorStore');
     useEditorStore.getState().closeAllFiles();
   },
 

@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAgentStore, useConversationStore } from '../../stores';
-import { Button } from '../common';
 import './InputArea.css';
 
 export const InputArea: React.FC = () => {
@@ -52,24 +51,28 @@ export const InputArea: React.FC = () => {
         />
         <div className="input-actions">
           {isProcessing ? (
-            <Button variant="secondary" size="sm" onClick={stopGeneration}>
+            <button
+              type="button"
+              className="input-action-button input-action-stop"
+              onClick={stopGeneration}
+              title="停止生成"
+            >
               <svg viewBox="0 0 24 24" width="16" height="16">
                 <path fill="currentColor" d="M6 6h12v12H6z" />
               </svg>
-              停止
-            </Button>
+            </button>
           ) : (
-            <Button
-              variant="primary"
-              size="sm"
+            <button
+              type="button"
+              className="input-action-button input-action-send"
               onClick={handleSubmit}
               disabled={!input.trim()}
+              title="发送消息"
             >
               <svg viewBox="0 0 24 24" width="16" height="16">
                 <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
               </svg>
-              发送
-            </Button>
+            </button>
           )}
         </div>
       </div>

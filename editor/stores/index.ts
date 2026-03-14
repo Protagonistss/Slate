@@ -21,3 +21,5 @@ export type { AgentStatus, ToolCallRecord, AgentState } from './agentStore';
 
 export { useProjectStore } from './projectStore';
 export type { ProjectState, ProjectInfo, ProjectFile } from './projectStore';
+
+export { useMcpStore } from './mcpStore';

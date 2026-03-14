@@ -28,11 +28,14 @@ export function AppLayout() {
   const { openProject, closeProject } = useProjectStore();
   const { closeAllFiles } = useEditorStore();
 
-  const currentMode: "home" | "editor" | "agent" = location.pathname.includes("agent")
+  const currentMode: "home" | "editor" | "agent" | "settings" = location.pathname === "/settings"
+    ? "settings"
+    : location.pathname.includes("agent")
     ? "agent"
     : location.pathname.includes("editor")
     ? "editor"
     : "home";
+  const isSettingsRoute = location.pathname === "/settings";
 
   // 打开新项目的处理函数
   const handleNewProject = async () => {
@@ -65,7 +68,7 @@ export function AppLayout() {
               <Panel defaultSize={18} minSize={15} maxSize={30} id="left-sidebar" order={1}>
                 <aside className="h-full bg-charcoal border-r border-graphite flex flex-col">
                   <div className="p-4 flex flex-col gap-6 flex-1 overflow-y-auto scrollbar-thin">
-                    {currentMode !== "editor" && (
+                    {currentMode !== "editor" && currentMode !== "settings" && (
                       <section>
                         <div className="space-y-1">
                           {currentMode === "home" && (
@@ -138,18 +141,24 @@ export function AppLayout() {
             <main className="h-full relative overflow-hidden">
               <div className="absolute inset-0 bg-[#0a0a0a] rounded-xl sm:rounded-2xl border border-white/[0.04] shadow-[0_0_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden m-0.5 sm:m-2 lg:m-4">
                 <div className="h-full w-full overflow-hidden relative rounded-xl sm:rounded-2xl flex flex-col">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={location.pathname}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.15, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
+                  {isSettingsRoute ? (
+                    <div className="h-full w-full">
                       <Outlet />
-                    </motion.div>
-                  </AnimatePresence>
+                    </div>
+                  ) : (
+                    <AnimatePresence initial={false} mode="sync">
+                      <motion.div
+                        key={location.pathname}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className="h-full w-full"
+                      >
+                        <Outlet />
+                      </motion.div>
+                    </AnimatePresence>
+                  )}
                 </div>
               </div>
             </main>

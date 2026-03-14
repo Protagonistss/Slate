@@ -1,21 +1,20 @@
 import { create } from 'zustand';
-import { LLMFactory, createDefaultConfig } from '../services/llm';
+import { LLMFactory } from '../services/llm';
 import { toolRegistry } from '../services/tools';
 import type {
-  LLMConfig,
+  ContentBlock,
   Message,
   StreamChunk,
   ToolDefinition,
-  ContentBlock,
+  ToolResultContentBlock,
+  ToolUseContentBlock,
 } from '../services/llm/types';
-import type { ToolContext } from '../services/tools';
+import type { ToolContext, ToolResult } from '../services/tools';
 import { useConfigStore } from './configStore';
 import { useConversationStore } from './conversationStore';
 
-// Agent 处理状态
 export type AgentStatus = 'idle' | 'thinking' | 'streaming' | 'tool_call' | 'error';
 
-// 工具调用记录
 export interface ToolCallRecord {
   id: string;
   name: string;
@@ -25,233 +24,225 @@ export interface ToolCallRecord {
   error?: string;
 }
 
-// 消息处理上下文
 interface MessageContext {
   conversationId: string;
-  messages: Message[];
-  assistantMessageIndex: number;
   tools: ToolDefinition[];
   toolContext: ToolContext;
+  systemPrompt?: string;
 }
 
-// Agent 状态
+interface AssistantAccumulator {
+  plainText: string;
+  blocks: ContentBlock[];
+  toolUses: ToolUseContentBlock[];
+}
+
 export interface AgentState {
-  // 处理状态
   status: AgentStatus;
   isProcessing: boolean;
-
-  // 当前流式内容
   currentStreamContent: string;
-
-  // 当前工具调用
   currentToolCalls: ToolCallRecord[];
-
-  // 错误信息
   error: string | null;
-
-  // AbortController
   abortController: AbortController | null;
-
-  // Actions
   sendMessage: (content: string) => Promise<void>;
   stopGeneration: () => void;
-  executeToolCall: (name: string, input: Record<string, unknown>) => Promise<unknown>;
+  executeToolCall: (name: string, input: Record<string, unknown>) => Promise<ToolResult>;
   setStatus: (status: AgentStatus) => void;
   clearError: () => void;
   reset: () => void;
 }
 
-// ========== 辅助函数 ==========
-
-/**
- * 准备消息处理上下文
- */
-function prepareMessageContext(content: string): MessageContext | null {
+function getCurrentMessages(
+  conversationId: string,
+  systemPrompt?: string
+): Message[] {
   const conversationStore = useConversationStore.getState();
-  const configStore = useConfigStore.getState();
-
-  // 确保有当前会话
-  let conversationId = conversationStore.currentConversationId;
-  if (!conversationId) {
-    conversationId = conversationStore.createConversation();
-  }
-
-  // 添加用户消息
-  const userMessage: Message = {
-    role: 'user',
-    content,
-  };
-  conversationStore.addMessage(conversationId, userMessage);
-
-  // 获取 LLM 配置
-  const llmConfig = configStore.getCurrentLLMConfig();
-
-  if (!llmConfig.apiKey && llmConfig.provider !== 'ollama') {
-    return null;
-  }
-
-  // 准备消息历史
   const conversation = conversationStore.getConversation(conversationId);
-  const messages: Message[] = conversation
-    ? conversation.messages
-    : [userMessage];
+  const messages = conversation ? [...conversation.messages] : [];
 
-  // 添加系统提示
-  const systemPrompt = configStore.llmConfigs[configStore.currentProvider].systemPrompt;
-  if (systemPrompt && !messages.find((m) => m.role === 'system')) {
+  if (systemPrompt) {
     messages.unshift({
       role: 'system',
       content: systemPrompt,
     });
   }
 
-  // 获取工具定义
-  const tools = toolRegistry.getAllDefinitions();
+  return messages;
+}
 
-  // 构建工具上下文
-  const toolContext: ToolContext = {
-    workingDirectory: configStore.workingDirectory,
-  };
+function appendAssistantText(
+  conversationId: string,
+  assistantMessageIndex: number,
+  accumulator: AssistantAccumulator,
+  chunk: string
+): void {
+  const conversationStore = useConversationStore.getState();
 
-  // 添加助手消息占位
-  const assistantMessage: Message = {
+  if (accumulator.blocks.length === 0) {
+    accumulator.plainText += chunk;
+    conversationStore.updateMessage(
+      conversationId,
+      assistantMessageIndex,
+      accumulator.plainText
+    );
+    return;
+  }
+
+  const lastBlock = accumulator.blocks[accumulator.blocks.length - 1];
+  if (lastBlock?.type === 'text') {
+    lastBlock.text += chunk;
+  } else {
+    accumulator.blocks.push({
+      type: 'text',
+      text: chunk,
+    });
+  }
+
+  conversationStore.updateMessage(
+    conversationId,
+    assistantMessageIndex,
+    [...accumulator.blocks]
+  );
+}
+
+function appendAssistantToolUse(
+  conversationId: string,
+  assistantMessageIndex: number,
+  accumulator: AssistantAccumulator,
+  toolUse: ToolUseContentBlock
+): void {
+  const conversationStore = useConversationStore.getState();
+
+  if (accumulator.blocks.length === 0 && accumulator.plainText) {
+    accumulator.blocks.push({
+      type: 'text',
+      text: accumulator.plainText,
+    });
+  }
+
+  accumulator.blocks.push(toolUse);
+  accumulator.toolUses.push(toolUse);
+
+  conversationStore.updateMessage(
+    conversationId,
+    assistantMessageIndex,
+    [...accumulator.blocks]
+  );
+}
+
+function createAssistantMessage(
+  conversationId: string
+): number {
+  const conversationStore = useConversationStore.getState();
+  const conversation = conversationStore.getConversation(conversationId);
+  const assistantMessageIndex = conversation?.messages.length || 0;
+  conversationStore.addMessage(conversationId, {
     role: 'assistant',
     content: '',
-  };
-  conversationStore.addMessage(conversationId, assistantMessage);
-  const assistantMessageIndex = (conversation?.messages.length || 0) + 1;
+  });
+  return assistantMessageIndex;
+}
+
+function prepareMessageContext(content: string): MessageContext | null {
+  const conversationStore = useConversationStore.getState();
+  const configStore = useConfigStore.getState();
+
+  let conversationId = conversationStore.currentConversationId;
+  if (!conversationId) {
+    conversationId = conversationStore.createConversation();
+  }
+
+  conversationStore.addMessage(conversationId, {
+    role: 'user',
+    content,
+  });
+
+  const llmConfig = configStore.getCurrentLLMConfig();
+  if (!llmConfig.apiKey && llmConfig.provider !== 'ollama') {
+    return null;
+  }
 
   return {
     conversationId,
-    messages,
-    assistantMessageIndex,
-    tools,
-    toolContext,
+    tools: toolRegistry.getAllDefinitions(),
+    toolContext: {
+      workingDirectory: configStore.workingDirectory,
+    },
+    systemPrompt: configStore.llmConfigs[configStore.currentProvider].systemPrompt,
   };
 }
 
-/**
- * 处理工具执行
- */
-async function handleToolExecution(
-  chunk: { toolUse: { id: string; name: string; input: Record<string, unknown> } },
+function serializeToolResult(toolResult: ToolResult): string {
+  if (toolResult.data !== undefined) {
+    return typeof toolResult.data === 'string'
+      ? toolResult.data
+      : JSON.stringify(toolResult.data);
+  }
+
+  return toolResult.error || 'Tool execution failed';
+}
+
+async function executeToolUses(
+  toolUses: ToolUseContentBlock[],
   conversationId: string,
-  context: MessageContext,
   setState: (partial: Partial<AgentState> | ((state: AgentState) => Partial<AgentState>)) => void,
-  executeToolCallFn: (name: string, input: Record<string, unknown>) => Promise<unknown>
+  executeToolCallFn: (name: string, input: Record<string, unknown>) => Promise<ToolResult>
 ): Promise<void> {
   const conversationStore = useConversationStore.getState();
 
-  // 记录工具调用
-  const toolCall: ToolCallRecord = {
-    id: chunk.toolUse.id,
-    name: chunk.toolUse.name,
-    input: chunk.toolUse.input,
-    status: 'pending',
-  };
-  setState((state) => ({
-    currentToolCalls: [...state.currentToolCalls, toolCall],
-  }));
-
-  // 执行工具
-  try {
-    const result = await executeToolCallFn(
-      chunk.toolUse.name,
-      chunk.toolUse.input
-    );
-
-    // 更新工具调用状态
-    setState((state) => ({
-      currentToolCalls: state.currentToolCalls.map((tc) =>
-        tc.id === chunk.toolUse!.id
-          ? { ...tc, status: 'success' as const, result }
-          : tc
-      ),
-    }));
-
-    // 将工具结果添加到消息
-    const toolResultMessage: Message = {
-      role: 'user',
-      content: [
-        {
-          type: 'tool_result',
-          tool_use_id: chunk.toolUse.id,
-          content: JSON.stringify(result),
-        } as ContentBlock,
-      ],
+  for (const toolUse of toolUses) {
+    const pendingRecord: ToolCallRecord = {
+      id: toolUse.id,
+      name: toolUse.name,
+      input: toolUse.input,
+      status: 'running',
     };
-    conversationStore.addMessage(conversationId, toolResultMessage);
-  } catch (error) {
+
     setState((state) => ({
-      currentToolCalls: state.currentToolCalls.map((tc) =>
-        tc.id === chunk.toolUse!.id
-          ? {
-              ...tc,
-              status: 'error' as const,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            }
-          : tc
-      ),
+      status: 'tool_call',
+      currentToolCalls: [...state.currentToolCalls, pendingRecord],
     }));
-  }
-}
 
-/**
- * 处理流式响应块
- */
-async function processStreamChunk(
-  chunk: StreamChunk,
-  context: MessageContext,
-  abortController: AbortController,
-  setState: (partial: Partial<AgentState> | ((state: AgentState) => Partial<AgentState>)) => void,
-  executeToolCallFn: (name: string, input: Record<string, unknown>) => Promise<unknown>
-): Promise<boolean> {
-  const conversationStore = useConversationStore.getState();
-  const get = useAgentStore.getState();
+    const toolResult = await executeToolCallFn(toolUse.name, toolUse.input);
+    const resultContent = serializeToolResult(toolResult);
+    const resultBlock: ToolResultContentBlock = {
+      type: 'tool_result',
+      tool_use_id: toolUse.id,
+      content: resultContent,
+      is_error: !toolResult.success,
+    };
 
-  switch (chunk.type) {
-    case 'content':
-      setState({ status: 'streaming' });
-      const newContent = get.currentStreamContent + (chunk.content || '');
-      setState({ currentStreamContent: newContent });
-      conversationStore.updateMessage(
-        context.conversationId,
-        context.assistantMessageIndex,
-        newContent
-      );
-      return true;
+    conversationStore.addMessage(conversationId, {
+      role: 'user',
+      content: [resultBlock],
+    });
 
-    case 'tool_use':
-      setState({ status: 'tool_call' });
-      if (chunk.toolUse) {
-        await handleToolExecution(
-          { toolUse: chunk.toolUse },
-          context.conversationId,
-          context,
-          setState,
-          executeToolCallFn
-        );
-      }
-      return true;
-
-    case 'error':
-      setState({
-        status: 'error',
-        error: chunk.error || 'Unknown error',
-        isProcessing: false,
-      });
-      return false;
-
-    case 'done':
-      setState({
-        status: 'idle',
-        isProcessing: false,
-        currentStreamContent: '',
-      });
-      return false;
-
-    default:
-      return true;
+    if (toolResult.success) {
+      setState((state) => ({
+        currentToolCalls: state.currentToolCalls.map((toolCall) =>
+          toolCall.id === toolUse.id
+            ? {
+                ...toolCall,
+                status: 'success',
+                result: toolResult.data,
+              }
+            : toolCall
+        ),
+      }));
+    } else {
+      setState((state) => ({
+        currentToolCalls: state.currentToolCalls.map((toolCall) =>
+          toolCall.id === toolUse.id
+            ? {
+                ...toolCall,
+                status: 'error',
+                result: toolResult.data,
+                error: toolResult.error,
+              }
+            : toolCall
+        ),
+      }));
+    }
   }
 }
 
@@ -267,7 +258,6 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const configStore = useConfigStore.getState();
     const llmConfig = configStore.getCurrentLLMConfig();
 
-    // 验证 API Key
     if (!llmConfig.apiKey && llmConfig.provider !== 'ollama') {
       set({
         status: 'error',
@@ -277,7 +267,6 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       return;
     }
 
-    // 准备消息上下文
     const context = prepareMessageContext(content);
     if (!context) {
       set({
@@ -288,11 +277,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       return;
     }
 
-    // 创建适配器
     const adapter = LLMFactory.createAdapter(llmConfig);
-
-    // 创建 AbortController
     const abortController = new AbortController();
+
     set({
       status: 'thinking',
       isProcessing: true,
@@ -303,59 +290,134 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     });
 
     try {
-      // 流式处理响应
-      for await (const chunk of adapter.sendMessage(
-        context.messages,
-        context.tools,
-        abortController.signal
-      )) {
-        if (abortController.signal.aborted) break;
+      while (!abortController.signal.aborted) {
+        const messages = getCurrentMessages(
+          context.conversationId,
+          context.systemPrompt
+        );
+        const assistantMessageIndex = createAssistantMessage(context.conversationId);
+        const accumulator: AssistantAccumulator = {
+          plainText: '',
+          blocks: [],
+          toolUses: [],
+        };
+        let streamFailed = false;
 
-        const shouldContinue = await processStreamChunk(
-          chunk,
-          context,
-          abortController,
+        for await (const chunk of adapter.sendMessage(
+          messages,
+          context.tools,
+          abortController.signal
+        )) {
+          if (abortController.signal.aborted) {
+            break;
+          }
+
+          switch (chunk.type) {
+            case 'content':
+              set({ status: 'streaming' });
+              appendAssistantText(
+                context.conversationId,
+                assistantMessageIndex,
+                accumulator,
+                chunk.content || ''
+              );
+              set({
+                currentStreamContent: accumulator.plainText,
+              });
+              break;
+
+            case 'tool_use':
+              if (chunk.toolUse) {
+                appendAssistantToolUse(
+                  context.conversationId,
+                  assistantMessageIndex,
+                  accumulator,
+                  {
+                    type: 'tool_use',
+                    id: chunk.toolUse.id,
+                    name: chunk.toolUse.name,
+                    input: chunk.toolUse.input,
+                  }
+                );
+              }
+              break;
+
+            case 'error':
+              set({
+                status: 'error',
+                error: chunk.error || 'Unknown error',
+                isProcessing: false,
+                abortController: null,
+              });
+              streamFailed = true;
+              break;
+
+            case 'done':
+              break;
+
+            default:
+              break;
+          }
+
+          if (streamFailed) {
+            break;
+          }
+        }
+
+        if (streamFailed || abortController.signal.aborted) {
+          return;
+        }
+
+        set({ currentStreamContent: '' });
+
+        if (accumulator.toolUses.length === 0) {
+          break;
+        }
+
+        await executeToolUses(
+          accumulator.toolUses,
+          context.conversationId,
           set,
           get().executeToolCall
         );
 
-        if (!shouldContinue) break;
+        set({ status: 'thinking' });
       }
+
+      set({
+        status: 'idle',
+        isProcessing: false,
+        currentStreamContent: '',
+        abortController: null,
+      });
     } catch (error) {
       set({
         status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error',
         isProcessing: false,
+        abortController: null,
       });
     }
   },
 
   stopGeneration: () => {
     const { abortController } = get();
-    if (abortController) {
-      abortController.abort();
-    }
+    abortController?.abort();
     set({
       status: 'idle',
       isProcessing: false,
       currentStreamContent: '',
+      abortController: null,
     });
   },
 
   executeToolCall: async (name: string, input: Record<string, unknown>) => {
     const configStore = useConfigStore.getState();
-
     const context: ToolContext = {
       workingDirectory: configStore.workingDirectory,
     };
 
-    const result = await toolRegistry.execute(name, input, context);
-
-    if (!result.success) {
-      throw new Error(result.error || 'Tool execution failed');
-    }
-
-    return result.data;
+    return toolRegistry.execute(name, input, context);
   },
 
   setStatus: (status) => set({ status }),
