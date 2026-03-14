@@ -5,13 +5,15 @@ import {
   Settings,
   Share2,
   History,
+  User,
   Minus,
   Square,
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Logo, SimpleLogo } from "../shared";
+import { Logo } from "../shared";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useAuthStore } from "@/stores";
 
 interface TopBarProps {
   onToggleRightSidebar?: () => void;
@@ -21,6 +23,7 @@ interface TopBarProps {
 export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBarProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const authUser = useAuthStore((state) => state.user);
   const isEditor = location.pathname === "/editor";
   const isAgent = location.pathname === "/agent";
   const isHome = location.pathname === "/";
@@ -45,6 +48,8 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
     if (target.tagName === 'BUTTON' || target.tagName === 'A' || target.closest('button') || target.closest('a')) return;
     getCurrentWindow().startDragging();
   };
+
+  const userInitial = authUser?.username.trim().charAt(0).toUpperCase() || "";
 
   return (
     <header
@@ -111,12 +116,16 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
         </button>
         <div className="h-4 w-px bg-graphite" />
         <div
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/settings?tab=account")}
           onMouseDown={(e) => e.stopPropagation()}
           className="h-8 w-8 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center hover:bg-zinc-700 hover:border-zinc-600 transition-all cursor-pointer select-none"
-          title="回到首页"
+          title={authUser ? "打开账号设置" : "登录与账号设置"}
         >
-          <SimpleLogo size={20} />
+          {authUser ? (
+            <span className="text-[12px] font-semibold text-zinc-100">{userInitial}</span>
+          ) : (
+            <User size={16} className="text-zinc-300" />
+          )}
         </div>
 
         {/* Window Controls */}

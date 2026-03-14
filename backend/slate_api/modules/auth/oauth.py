@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import secrets
 from typing import Any
 from urllib.parse import urlencode
 
@@ -11,8 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from slate_api.core.config import settings
+from slate_api.infra.database import redis_client
 from slate_api.infra.models import AuthIdentity, User
+from slate_api.modules.auth.schemas import TokenPairResponse
 from slate_api.modules.auth.service import issue_token_pair
+
+OAUTH_EXCHANGE_TICKET_PREFIX = "oauth:exchange:"
+OAUTH_EXCHANGE_TICKET_TTL_SECONDS = 120
 
 
 class OAuthError(Exception):
@@ -213,3 +219,20 @@ def upsert_oauth_user(
     db.commit()
     db.refresh(user)
     return issue_token_pair(db, user, user_agent=user_agent, ip_address=ip_address)
+
+
+def store_oauth_exchange_ticket(provider: str, payload: TokenPairResponse) -> str:
+    ticket = f"{provider}_{secrets.token_urlsafe(24)}"
+    redis_client.setex(
+        f"{OAUTH_EXCHANGE_TICKET_PREFIX}{ticket}",
+        OAUTH_EXCHANGE_TICKET_TTL_SECONDS,
+        payload.model_dump_json(),
+    )
+    return ticket
+
+
+def consume_oauth_exchange_ticket(ticket: str) -> TokenPairResponse:
+    raw_payload = redis_client.getdel(f"{OAUTH_EXCHANGE_TICKET_PREFIX}{ticket}")
+    if not raw_payload:
+        raise OAuthError("OAuth 交换票据无效或已过期")
+    return TokenPairResponse.model_validate_json(raw_payload)

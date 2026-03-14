@@ -50,5 +50,9 @@ class OAuthStartResponse(BaseModel):
     state: str
 
 
+class OAuthExchangeRequest(BaseModel):
+    ticket: str = Field(min_length=1, max_length=512)
+
+
 class DetailResponse(BaseModel):
     detail: str

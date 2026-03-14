@@ -47,5 +47,13 @@
     "copyright": "",
     "category": "DeveloperTool"
   },
-  "plugins": {}
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "slate"
+        ]
+      }
+    }
+  }
 }

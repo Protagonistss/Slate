@@ -167,6 +167,33 @@ def test_oauth_callback_redirects_when_redirect_to_is_present(monkeypatch) -> No
     assert response.headers["location"].startswith("http://localhost:1420/auth/callback#")
 
 
+def test_github_oauth_callback_redirects_to_app_deep_link_with_ticket(monkeypatch) -> None:
+    async def fake_exchange_code_for_access_token(provider: str, code: str) -> dict[str, str]:
+        return {"access_token": f"{provider}-{code}"}
+
+    async def fake_fetch_user_profile(provider: str, access_token: str) -> dict[str, str]:
+        return {"id": "github-user", "login": "octocat", "email": "octocat@example.com"}
+
+    monkeypatch.setattr(auth_router_module.settings, "frontend_oauth_success_url", "")
+    monkeypatch.setattr(auth_router_module.settings, "frontend_oauth_failure_url", "")
+    monkeypatch.setattr(auth_router_module, "exchange_code_for_access_token", fake_exchange_code_for_access_token)
+    monkeypatch.setattr(auth_router_module, "fetch_user_profile", fake_fetch_user_profile)
+    monkeypatch.setattr(auth_router_module, "upsert_oauth_user", lambda *args, **kwargs: _token_pair_response())
+    monkeypatch.setattr(auth_router_module, "store_oauth_exchange_ticket", lambda provider, payload: "ticket-123")
+
+    state = create_oauth_state("github", "slate://auth/callback")
+
+    with build_test_client() as client:
+        response = client.get(
+            "/api/v1/auth/oauth/github/callback",
+            params={"code": "code-123", "state": state},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "slate://auth/callback?ticket=ticket-123&provider=github"
+
+
 def test_gitee_oauth_callback_redirects_when_redirect_to_is_present(monkeypatch) -> None:
     async def fake_exchange_code_for_access_token(provider: str, code: str) -> dict[str, str]:
         return {"access_token": f"{provider}-{code}"}
@@ -191,3 +218,31 @@ def test_gitee_oauth_callback_redirects_when_redirect_to_is_present(monkeypatch)
 
     assert response.status_code == 302
     assert response.headers["location"].startswith("http://localhost:1420/auth/callback#")
+
+
+def test_oauth_exchange_returns_token_pair_from_ticket(monkeypatch) -> None:
+    monkeypatch.setattr(
+        auth_router_module,
+        "consume_oauth_exchange_ticket",
+        lambda ticket: _token_pair_response() if ticket == "ticket-123" else None,
+    )
+
+    with build_test_client() as client:
+        response = client.post("/api/v1/auth/oauth/exchange", json={"ticket": "ticket-123"})
+
+    assert response.status_code == 200
+    assert response.json()["access_token"] == "access-token"
+    assert response.json()["user"]["username"] == "octocat"
+
+
+def test_oauth_exchange_returns_error_for_invalid_ticket(monkeypatch) -> None:
+    def fake_consume(_: str):
+        raise auth_router_module.OAuthError("OAuth 交换票据无效或已过期")
+
+    monkeypatch.setattr(auth_router_module, "consume_oauth_exchange_ticket", fake_consume)
+
+    with build_test_client() as client:
+        response = client.post("/api/v1/auth/oauth/exchange", json={"ticket": "missing-ticket"})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "OAuth 交换票据无效或已过期"}

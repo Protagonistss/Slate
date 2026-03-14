@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
   Cpu,
+  ExternalLink,
   Keyboard,
   Key,
   Link2,
@@ -19,9 +20,13 @@ import {
   X,
 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
-import { useConfigStore, useMcpStore, useProjectStore, useUIStore } from "@/stores";
+import { openUrl } from "@/services/tauri/shell";
+import { isTauriEnvironment } from "@/services/tauri/deepLink";
+import { useAuthStore, useConfigStore, useMcpStore, useProjectStore, useUIStore } from "@/stores";
 import type { ApiKeyStorage } from "@/stores/configStore";
+import { getBackendBaseUrl, type AuthUser, type OAuthProvider } from "@/services/backend/auth";
 import type { LLMConfig, LLMProvider } from "@/services/llm/types";
 import type {
   McpConfigScope,
@@ -39,6 +44,12 @@ const NAV_ITEMS = [
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "account", label: "Account", icon: User },
 ] as const;
+
+const ACCOUNT_PROVIDERS: { id: OAuthProvider; label: string }[] = [
+  { id: "github", label: "GitHub" },
+  { id: "gitee", label: "Gitee" },
+  { id: "google", label: "Google" },
+];
 
 const PROVIDERS: {
   id: LLMProvider;
@@ -319,6 +330,140 @@ function statusDot(status: McpServerStatus["status"]) {
     default:
       return "bg-zinc-600";
   }
+}
+
+interface AccountSettingsProps {
+  user: AuthUser | null;
+  currentOAuthProvider: OAuthProvider | null;
+  isLoading: boolean;
+  backendBaseUrl: string;
+  onConnect: (provider: OAuthProvider) => Promise<void>;
+  onDisconnect: (provider: OAuthProvider) => Promise<void>;
+  onSignOut: () => Promise<void>;
+  onDeleteAccount: () => void;
+}
+
+function AccountSettings({
+  user,
+  currentOAuthProvider,
+  isLoading,
+  backendBaseUrl,
+  onConnect,
+  onDisconnect,
+  onSignOut,
+  onDeleteAccount,
+}: AccountSettingsProps) {
+  const isSignedIn = Boolean(user);
+  const avatarText = (user?.username.trim().charAt(0) || "S").toUpperCase();
+
+  return (
+    <motion.div
+      key="account"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.25 }}
+      className="max-w-[600px] space-y-12"
+    >
+      <div>
+        <h2 className="mb-1 text-[20px] font-medium text-zinc-100">Account</h2>
+        <p className="text-[13px] text-zinc-500">Manage your profile and connected services.</p>
+      </div>
+
+      <section className="space-y-4">
+        <h3 className="text-[11px] font-medium uppercase tracking-widest text-zinc-600">Profile</h3>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-800 text-[13px] font-semibold text-zinc-200">
+              {avatarText}
+            </div>
+            <div>
+              <div className="text-[13px] font-medium text-zinc-300">
+                {user?.username || "Not signed in"}
+              </div>
+              <div className="text-[12px] text-zinc-600">
+                {user?.email || "Use GitHub, Gitee or Google to sign in via the backend."}
+              </div>
+            </div>
+          </div>
+          {isSignedIn ? (
+            <button
+              onClick={() => void onSignOut()}
+              disabled={isLoading}
+              className="text-[12px] text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoading ? "Signing out..." : "Sign Out"}
+            </button>
+          ) : (
+            <span className="text-[12px] text-zinc-600">Backend OAuth</span>
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-[11px] font-medium uppercase tracking-widest text-zinc-600">
+            Connected Accounts
+          </h3>
+          <span className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+            <ExternalLink size={12} />
+            {backendBaseUrl}
+          </span>
+        </div>
+
+        <div className="space-y-4">
+          {ACCOUNT_PROVIDERS.map((provider) => {
+            const isConnected = currentOAuthProvider === provider.id && isSignedIn;
+            const handle = isConnected ? `(@${user?.username})` : null;
+
+            return (
+              <div key={provider.id} className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-[13px] text-zinc-400">{provider.label}</span>
+                  {handle && (
+                    <span className="font-mono text-[11px] text-zinc-600">{handle}</span>
+                  )}
+                </div>
+
+                {isConnected ? (
+                  <button
+                    onClick={() => void onDisconnect(provider.id)}
+                    disabled={isLoading}
+                    className="text-[12px] text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? "Disconnecting..." : "Disconnect"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => void onConnect(provider.id)}
+                    disabled={isLoading}
+                    className="text-[12px] text-zinc-300 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? "Connecting..." : "Connect"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="space-y-4 pt-4">
+        <h3 className="text-[11px] font-medium uppercase tracking-widest text-red-500/50">
+          Danger Zone
+        </h3>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-[13px] text-zinc-500">Delete Account</span>
+          <button
+            onClick={onDeleteAccount}
+            className="text-[12px] text-red-400/70 transition-colors hover:text-red-400"
+          >
+            Delete
+          </button>
+        </div>
+      </section>
+    </motion.div>
+  );
 }
 
 function PlaceholderSettings({ title }: { title: string }) {
@@ -940,6 +1085,8 @@ function MCPSettings({
 }
 
 export function SettingsView() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SettingsTab>("models");
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<McpServerDraft>(emptyDraft("global"));
@@ -964,12 +1111,33 @@ export function SettingsView() {
   const retryServer = useMcpStore((state) => state.retryServer);
   const mcpError = useMcpStore((state) => state.error);
   const clearError = useMcpStore((state) => state.clearError);
+  const authUser = useAuthStore((state) => state.user);
+  const currentOAuthProvider = useAuthStore((state) => state.currentOAuthProvider);
+  const authLoading = useAuthStore((state) => state.isLoading);
+  const authError = useAuthStore((state) => state.error);
+  const beginOAuth = useAuthStore((state) => state.beginOAuth);
+  const completeOAuthCallback = useAuthStore((state) => state.completeOAuthCallback);
+  const signOut = useAuthStore((state) => state.signOut);
+  const refreshProfile = useAuthStore((state) => state.refreshProfile);
+  const clearAuthError = useAuthStore((state) => state.clearError);
 
   useEffect(() => {
     if (!initialized) {
       void initialize();
     }
   }, [initialize, initialized]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    const hashTab =
+      location.hash && !location.hash.includes("=") ? location.hash.replace(/^#/, "") : null;
+    const nextTab = tab || hashTab;
+
+    if (nextTab && NAV_ITEMS.some((item) => item.id === nextTab) && nextTab !== activeTab) {
+      setActiveTab(nextTab as SettingsTab);
+    }
+  }, [activeTab, location.hash, location.search]);
 
   useEffect(() => {
     if (mcpError) {
@@ -979,10 +1147,27 @@ export function SettingsView() {
   }, [addToast, clearError, mcpError]);
 
   useEffect(() => {
+    if (authError) {
+      addToast({ type: "error", message: authError });
+      clearAuthError();
+    }
+  }, [addToast, authError, clearAuthError]);
+
+  useEffect(() => {
     if (!currentProject && draft.scope === "project") {
       setDraft((current) => ({ ...current, scope: "global" }));
     }
   }, [currentProject, draft.scope]);
+
+  useEffect(() => {
+    if (!authUser || activeTab !== "account") {
+      return;
+    }
+
+    void refreshProfile().catch(() => {
+      // 错误交给 authStore 的 error/toast 链路处理。
+    });
+  }, [activeTab, authUser, refreshProfile]);
 
   const normalizedConfigs = useMemo(
     () =>
@@ -1010,6 +1195,44 @@ export function SettingsView() {
       setCurrentProvider(safeProvider);
     }
   }, [currentProvider, safeProvider, setCurrentProvider]);
+
+  useEffect(() => {
+    if (!location.hash.includes("access_token") && !location.hash.includes("error=")) {
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+    const providerParam = params.get("provider");
+    const provider =
+      providerParam === "github" || providerParam === "gitee" || providerParam === "google"
+        ? providerParam
+        : null;
+
+    let cancelled = false;
+
+    void (async () => {
+      const result = await completeOAuthCallback(location.hash, provider);
+      if (cancelled) {
+        return;
+      }
+
+      if (result.success) {
+        addToast({ type: "success", message: "账号已连接，当前会话已同步。" });
+      } else if (result.error) {
+        addToast({ type: "error", message: result.error });
+      }
+
+      const nextParams = new URLSearchParams(location.search);
+      nextParams.set("tab", "account");
+      nextParams.delete("provider");
+      const nextSearch = nextParams.toString();
+      navigate(`/settings${nextSearch ? `?${nextSearch}` : ""}`, { replace: true });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [addToast, completeOAuthCallback, location.hash, location.search, navigate]);
 
   const scopeOptions = useMemo(
     () =>
@@ -1162,6 +1385,65 @@ export function SettingsView() {
     }
   };
 
+  const handleConnectAccount = async (provider: OAuthProvider) => {
+    if (provider !== "github") {
+      addToast({
+        type: "info",
+        message: `${provider} 登录入口已保留，但这次只接通 GitHub。`,
+      });
+      return;
+    }
+
+    try {
+      const redirectTo = isTauriEnvironment()
+        ? `slate://auth/callback?provider=${provider}`
+        : `${window.location.origin}/settings?tab=account&provider=${provider}`;
+      const authorizationUrl = await beginOAuth(provider, redirectTo);
+
+      if (isTauriEnvironment()) {
+        await openUrl(authorizationUrl);
+      } else {
+        window.location.assign(authorizationUrl);
+      }
+    } catch (error) {
+      addToast({
+        type: "error",
+        message: error instanceof Error ? error.message : `连接 ${provider} 失败`,
+      });
+    }
+  };
+
+  const handleDisconnectAccount = async (provider: OAuthProvider) => {
+    if (currentOAuthProvider !== provider) {
+      addToast({
+        type: "info",
+        message: `${provider} 的解绑接口还没有接入，当前只支持断开当前登录会话。`,
+      });
+      return;
+    }
+
+    await signOut();
+    addToast({
+      type: "success",
+      message: `已断开 ${provider} 当前会话。`,
+    });
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    addToast({
+      type: "success",
+      message: "已退出当前账号。",
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    addToast({
+      type: "warning",
+      message: "删除账号接口还未接入后端，当前版本暂不支持。",
+    });
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case "models":
@@ -1198,6 +1480,19 @@ export function SettingsView() {
             handleDeleteServer={handleDeleteServer}
           />
         );
+      case "account":
+        return (
+          <AccountSettings
+            user={authUser}
+            currentOAuthProvider={currentOAuthProvider}
+            isLoading={authLoading}
+            backendBaseUrl={getBackendBaseUrl()}
+            onConnect={handleConnectAccount}
+            onDisconnect={handleDisconnectAccount}
+            onSignOut={handleSignOut}
+            onDeleteAccount={handleDeleteAccount}
+          />
+        );
       default:
         return (
           <PlaceholderSettings
@@ -1223,7 +1518,12 @@ export function SettingsView() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    const nextParams = new URLSearchParams(location.search);
+                    nextParams.set("tab", item.id);
+                    navigate(`/settings?${nextParams.toString()}`, { replace: true });
+                  }}
                   className={cn(
                     "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
                     isActive

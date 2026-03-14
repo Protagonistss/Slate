@@ -9,12 +9,16 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_dialog::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::read_workspace_dir,
             commands::read_workspace_text_file,
@@ -35,6 +39,15 @@ pub fn run() {
             commands::call_mcp_tool,
         ])
         .setup(|app| {
+            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+
+                app.deep_link()
+                    .register_all()
+                    .map_err(|error| error.to_string())?;
+            }
+
             let manager = config::ConfigManager::new()
                 .map_err(|e| e.to_string())?;
             let effective_mcp_servers = manager

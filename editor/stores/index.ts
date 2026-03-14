@@ -23,3 +23,5 @@ export { useProjectStore } from './projectStore';
 export type { ProjectState, ProjectInfo, ProjectFile } from './projectStore';
 
 export { useMcpStore } from './mcpStore';
+
+export { useAuthStore } from './authStore';

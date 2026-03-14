@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TopBar } from "./TopBar";
 import { ProjectFileTree } from "./ProjectFileTree";
 import {
@@ -18,7 +18,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SimpleLogo } from "../shared";
-import { useProjectStore, useEditorStore } from "@/stores";
+import { parseOAuthDeepLinkUrl } from "@/services/backend/auth";
+import { getCurrentDeepLinks, onDeepLinkOpen } from "@/services/tauri/deepLink";
+import { useAuthStore, useProjectStore, useEditorStore, useUIStore } from "@/stores";
 
 export function AppLayout() {
   const location = useLocation();
@@ -27,6 +29,9 @@ export function AppLayout() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const { openProject, closeProject } = useProjectStore();
   const { closeAllFiles } = useEditorStore();
+  const completeOAuthExchange = useAuthStore((state) => state.completeOAuthExchange);
+  const addToast = useUIStore((state) => state.addToast);
+  const processedDeepLinksRef = useRef<Set<string>>(new Set());
 
   const currentMode: "home" | "editor" | "agent" | "settings" = location.pathname === "/settings"
     ? "settings"
@@ -51,6 +56,60 @@ export function AppLayout() {
       navigate("/editor");
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const processUrls = async (urls: string[]) => {
+      for (const url of urls) {
+        if (cancelled || processedDeepLinksRef.current.has(url)) {
+          continue;
+        }
+
+        const payload = parseOAuthDeepLinkUrl(url);
+        if (!payload) {
+          continue;
+        }
+
+        processedDeepLinksRef.current.add(url);
+
+        if (payload.error) {
+          addToast({ type: "error", message: payload.error });
+          navigate("/settings?tab=account", { replace: true });
+          continue;
+        }
+
+        if (!payload.ticket) {
+          continue;
+        }
+
+        const result = await completeOAuthExchange(payload.ticket, payload.provider);
+        if (cancelled) {
+          return;
+        }
+
+        if (result.success) {
+          addToast({ type: "success", message: "GitHub 账号已连接。" });
+        } else if (result.error) {
+          addToast({ type: "error", message: result.error });
+        }
+
+        navigate("/settings?tab=account", { replace: true });
+      }
+    };
+
+    let unsubscribe: (() => void) | undefined;
+
+    void (async () => {
+      await processUrls(await getCurrentDeepLinks());
+      unsubscribe = await onDeepLinkOpen(processUrls);
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [addToast, completeOAuthExchange, navigate]);
 
   return (
     <div className="h-screen w-full bg-obsidian flex flex-col text-zinc-100 overflow-hidden">

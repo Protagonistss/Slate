@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -17,12 +17,15 @@ from slate_api.modules.auth.oauth import (
     decode_oauth_state,
     exchange_code_for_access_token,
     fetch_user_profile,
+    consume_oauth_exchange_ticket,
+    store_oauth_exchange_ticket,
     upsert_oauth_user,
 )
 from slate_api.modules.auth.schemas import (
     DetailResponse,
     LoginRequest,
     LogoutRequest,
+    OAuthExchangeRequest,
     OAuthStartResponse,
     RefreshRequest,
     RegisterRequest,
@@ -46,6 +49,21 @@ def _normalize_redirect_target(target: str | None) -> str | None:
 
     normalized = target.strip()
     return normalized or None
+
+
+def _is_app_deep_link(target: str | None) -> bool:
+    normalized = _normalize_redirect_target(target)
+    if normalized is None:
+        return False
+
+    return urlsplit(normalized).scheme == "slate"
+
+
+def _append_query_params(url: str, params: dict[str, str]) -> str:
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update(params)
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 @router.post("/auth/register", response_model=TokenPairResponse)
@@ -82,6 +100,14 @@ def refresh_token(
 def logout(payload: LogoutRequest, db: Session = Depends(get_db)) -> DetailResponse:
     logout_user(db, payload.refresh_token)
     return DetailResponse(detail="已退出登录")
+
+
+@router.post("/auth/oauth/exchange", response_model=TokenPairResponse)
+def oauth_exchange(payload: OAuthExchangeRequest) -> TokenPairResponse:
+    try:
+        return consume_oauth_exchange_ticket(payload.ticket)
+    except OAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/auth/oauth/{provider}/start", response_model=OAuthStartResponse)
@@ -137,6 +163,16 @@ async def oauth_callback(
             redirect_target = _normalize_redirect_target(settings.frontend_oauth_failure_url)
 
         if redirect_target:
+            if _is_app_deep_link(redirect_target):
+                target_url = _append_query_params(
+                    redirect_target,
+                    {
+                        "error": str(exc),
+                        "provider": provider,
+                    },
+                )
+                return RedirectResponse(url=target_url, status_code=status.HTTP_302_FOUND)
+
             fragment = urlencode({"error": str(exc)})
             return RedirectResponse(
                 url=f"{redirect_target}#{fragment}",
@@ -150,6 +186,17 @@ async def oauth_callback(
         redirect_target = _normalize_redirect_target(settings.frontend_oauth_success_url)
 
     if redirect_target:
+        if _is_app_deep_link(redirect_target):
+            ticket = store_oauth_exchange_ticket(provider, auth_payload)
+            target_url = _append_query_params(
+                redirect_target,
+                {
+                    "ticket": ticket,
+                    "provider": provider,
+                },
+            )
+            return RedirectResponse(url=target_url, status_code=status.HTTP_302_FOUND)
+
         fragment = urlencode(
             {
                 "access_token": auth_payload.access_token,
