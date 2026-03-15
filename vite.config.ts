@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 
+const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET || "http://127.0.0.1:8000";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   root: "editor",
@@ -15,6 +17,12 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    proxy: {
+      "/api/v1": {
+        target: backendProxyTarget,
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: "../dist",

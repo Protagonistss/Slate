@@ -44,6 +44,30 @@ function buildUrl(path: string): string {
   return `${getBackendBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function getBackendTargetLabel(): string {
+  const baseUrl = getBackendBaseUrl();
+  if (!baseUrl.startsWith("/")) {
+    return baseUrl;
+  }
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}${baseUrl}`;
+  }
+
+  return baseUrl;
+}
+
+function getNetworkErrorMessage(error: unknown, fallback: string): string {
+  const detail =
+    error instanceof Error && error.message
+      ? error.message
+      : typeof error === "string" && error.trim()
+        ? error
+        : "network error";
+
+  return `${fallback}：无法连接 backend（${getBackendTargetLabel()}）。请确认 backend 已启动，并且 Vite 代理或 VITE_BACKEND_URL 配置正确。原始错误：${detail}`;
+}
+
 function getErrorMessage(status: number, data: unknown, fallback: string): string {
   if (data && typeof data === "object" && typeof (data as { detail?: unknown }).detail === "string") {
     return (data as { detail: string }).detail;
@@ -84,14 +108,20 @@ export async function createBackendLLMProvider(
   accessToken: string,
   payload: BackendLLMProviderUpsertRequest
 ): Promise<BackendLLMProvider> {
-  const response = await fetch(buildUrl("/llm/providers"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl("/llm/providers"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    throw new Error(getNetworkErrorMessage(error, "保存模型 Provider 失败"));
+  }
 
   const data = await response.json().catch(() => null);
   if (!response.ok || !data || typeof data !== "object") {
@@ -106,14 +136,20 @@ export async function updateBackendLLMProvider(
   providerName: string,
   payload: BackendLLMProviderUpsertRequest
 ): Promise<BackendLLMProvider> {
-  const response = await fetch(buildUrl(`/llm/providers/${encodeURIComponent(providerName)}`), {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(`/llm/providers/${encodeURIComponent(providerName)}`), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    throw new Error(getNetworkErrorMessage(error, "更新模型 Provider 失败"));
+  }
 
   const data = await response.json().catch(() => null);
   if (!response.ok || !data || typeof data !== "object") {
@@ -124,12 +160,18 @@ export async function updateBackendLLMProvider(
 }
 
 export async function deleteBackendLLMProvider(accessToken: string, providerName: string): Promise<void> {
-  const response = await fetch(buildUrl(`/llm/providers/${encodeURIComponent(providerName)}`), {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(`/llm/providers/${encodeURIComponent(providerName)}`), {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  } catch (error) {
+    throw new Error(getNetworkErrorMessage(error, "删除模型 Provider 失败"));
+  }
 
   if (!response.ok) {
     const data = await response.json().catch(() => null);
@@ -142,15 +184,21 @@ export async function* streamBackendLLMChat(
   payload: BackendLLMChatRequest,
   signal?: AbortSignal
 ): AsyncGenerator<StreamChunk> {
-  const response = await fetch(buildUrl("/llm/chat/stream"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-    signal,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl("/llm/chat/stream"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (error) {
+    throw new Error(getNetworkErrorMessage(error, "调用模型网关失败"));
+  }
 
   if (!response.ok) {
     const data = await response.json().catch(async () => response.text().catch(() => null));

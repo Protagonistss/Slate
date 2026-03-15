@@ -71,6 +71,10 @@ function getProviderDetailText(provider: BackendLLMProvider, config?: LLMConfig 
   return provider.base_url?.trim() || config?.model || "Managed by backend";
 }
 
+function getApiKeyPlaceholder(provider: BackendLLMProvider): string {
+  return provider.source === "custom" && provider.configured ? "********" : "sk-...";
+}
+
 function SignInGuide({ user }: { user: AuthUser | null }) {
   const navigate = useNavigate();
 
@@ -510,15 +514,20 @@ export function AIModelsSettings() {
 
                                 <div className="flex items-center gap-4">
                                   <label className="w-24 flex-shrink-0 text-[12px] text-zinc-400">API Key</label>
-                                  <input
-                                    type="password"
-                                    value={draft.apiKey}
-                                    onChange={(event) =>
-                                      setDraft((current) => ({ ...current, apiKey: event.target.value }))
-                                    }
-                                    placeholder="sk-..."
-                                    className="flex-1 border-b border-white/10 bg-transparent pb-1.5 font-mono text-[12px] text-zinc-300 transition-colors placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
-                                  />
+                                  <div className="flex-1">
+                                    <input
+                                      type="password"
+                                      value={draft.apiKey}
+                                      onChange={(event) =>
+                                        setDraft((current) => ({ ...current, apiKey: event.target.value }))
+                                      }
+                                      placeholder={getApiKeyPlaceholder(provider)}
+                                      className="w-full border-b border-white/10 bg-transparent pb-1.5 font-mono text-[12px] text-zinc-300 transition-colors placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
+                                    />
+                                    {provider.configured && (
+                                      <p className="pt-1 text-[11px] text-zinc-600">留空表示保持当前 API Key。</p>
+                                    )}
+                                  </div>
                                 </div>
                               </>
                             ) : (

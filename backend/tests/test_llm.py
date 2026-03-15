@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 
@@ -138,3 +140,111 @@ def test_resolve_provider_prefers_explicit_configured_provider() -> None:
 
     assert provider.name == "deepseek"
     assert model == "deepseek-chat"
+
+
+def test_stream_chat_completion_ignores_unknown_conversation_id(monkeypatch) -> None:
+    llm, ChatMessage, *_ = _load_llm_dependencies()
+
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from slate_api.infra.database import Base
+    from slate_api.infra.models import LLMUsageLog, User
+    from slate_api.modules.llm.schemas import LLMChatRequest
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+    testing_session_local = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+    Base.metadata.create_all(bind=engine)
+    db = testing_session_local()
+
+    user = User(
+        id=uuid4(),
+        email="llm@test.dev",
+        username="llm-test",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    class FakeResponse:
+        status_code = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def aread(self) -> bytes:
+            return b""
+
+        async def aiter_lines(self):
+            yield "data: [DONE]"
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        def stream(self, *args, **kwargs) -> FakeResponse:
+            return FakeResponse()
+
+    fake_provider = SimpleNamespace(
+        name="glm",
+        api_key="secret-key",
+        base_url="https://example.com/v1",
+    )
+
+    monkeypatch.setattr(
+        llm,
+        "resolve_provider_for_user",
+        lambda db_session, current_user, provider_name, model_name: (fake_provider, model_name or "GLM-5"),
+    )
+    monkeypatch.setattr(llm.httpx, "AsyncClient", FakeAsyncClient)
+
+    request = LLMChatRequest(
+        conversation_id=uuid4(),
+        provider="glm",
+        model="GLM-5",
+        messages=[ChatMessage(role="user", content="你好")],
+    )
+
+    async def collect_events() -> list[str]:
+        events: list[str] = []
+        async for event in llm.stream_chat_completion(db, user, request):
+            events.append(event)
+        return events
+
+    try:
+        events = asyncio.run(collect_events())
+        usage_log = db.execute(select(LLMUsageLog)).scalar_one()
+
+        assert usage_log.conversation_id is None
+        assert usage_log.status == "completed"
+        assert events == ['data: {"type": "done"}\n\n']
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)

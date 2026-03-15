@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import secrets
 from typing import Any, AsyncIterator
+from uuid import UUID
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from slate_api.core.config import settings
@@ -18,7 +20,7 @@ from slate_api.infra.llm.providers import (
     resolve_provider_for_user,
     upsert_custom_provider,
 )
-from slate_api.infra.models import LLMUsageLog, User
+from slate_api.infra.models import Conversation, LLMUsageLog, User
 from slate_api.modules.llm.schemas import LLMChatRequest, LLMModelRead, LLMProviderRead
 
 
@@ -198,6 +200,24 @@ def _safe_json_loads(raw: str) -> dict[str, Any]:
         return {}
 
 
+def resolve_usage_conversation_id(
+    db: Session,
+    user: User,
+    conversation_id: UUID | None,
+) -> UUID | None:
+    if conversation_id is None:
+        return None
+
+    existing_conversation_id = db.execute(
+        select(Conversation.id).where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user.id,
+        )
+    ).scalar_one_or_none()
+
+    return existing_conversation_id
+
+
 async def stream_chat_completion(
     db: Session,
     user: User,
@@ -207,7 +227,7 @@ async def stream_chat_completion(
     usage_log = LLMUsageLog(
         request_id=secrets.token_urlsafe(16),
         user_id=user.id,
-        conversation_id=request.conversation_id,
+        conversation_id=resolve_usage_conversation_id(db, user, request.conversation_id),
         provider=provider.name,
         model=model,
         status="started",

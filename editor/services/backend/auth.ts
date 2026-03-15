@@ -69,15 +69,27 @@ const backendBaseUrl = (() => {
       ? import.meta.env.VITE_BACKEND_URL.trim()
       : "";
 
-  const defaultBaseUrl = isTauri
-    ? "http://127.0.0.1:8000/api/v1"
-    : "http://localhost:8000/api/v1";
+  const defaultBaseUrl = isTauri ? "http://127.0.0.1:8000/api/v1" : "/api/v1";
 
   return (envValue || defaultBaseUrl).replace(/\/+$/, "");
 })();
 
 function buildUrl(path: string): string {
   return `${backendBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function buildAbsoluteUrl(path: string): string {
+  const url = buildUrl(path);
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  const origin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost";
+
+  return new URL(url, origin).toString();
 }
 
 function getErrorMessage(status: number, data: unknown, fallback: string): string {
@@ -155,7 +167,7 @@ export async function requestOAuthAuthorizationUrl(
   provider: OAuthProvider,
   redirectTo: string
 ): Promise<string> {
-  const url = new URL(buildUrl(`/auth/oauth/${provider}/start`));
+  const url = new URL(buildAbsoluteUrl(`/auth/oauth/${provider}/start`));
   url.searchParams.set("redirect_to", redirectTo);
 
   let response;

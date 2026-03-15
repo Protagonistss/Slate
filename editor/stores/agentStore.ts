@@ -316,7 +316,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         for await (const chunk of streamBackendLLMChat(
           context.accessToken,
           {
-            conversation_id: context.conversationId,
+            // 当前会话只保存在本地 store，不能把本地 UUID 当作 backend conversation_id 传过去。
             provider: context.llmConfig.provider,
             model: context.llmConfig.model,
             messages,
