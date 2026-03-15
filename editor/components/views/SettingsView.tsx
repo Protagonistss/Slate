@@ -3,19 +3,12 @@ import {
   Cpu,
   ExternalLink,
   Keyboard,
-  Key,
-  Link2,
   Palette,
   Plus,
   Plug,
-  Power,
-  RotateCcw,
-  Save,
   Search,
   Settings2,
-  ShieldAlert,
   Terminal,
-  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -494,6 +487,38 @@ function PlaceholderSettings({ title }: { title: string }) {
   );
 }
 
+function maskSecret(value?: string) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return "Not configured";
+  }
+
+  if (trimmed.length <= 8) {
+    return `${trimmed.slice(0, 2)}...`;
+  }
+
+  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
+}
+
+function describeMcpStatus(status: McpServerStatus["status"]) {
+  switch (status) {
+    case "connected":
+      return "Connected";
+    case "approvalRequired":
+      return "Awaiting Approval";
+    case "connecting":
+      return "Connecting";
+    case "disabled":
+      return "Disabled";
+    case "unsupported":
+      return "Unsupported";
+    case "error":
+      return "Error";
+    default:
+      return "Offline";
+  }
+}
+
 function ModelsSettings({
   currentProvider,
   currentConfig,
@@ -503,6 +528,63 @@ function ModelsSettings({
   setLLMConfig,
   setApiKey,
 }: ModelsSettingsProps) {
+  const activeProvider = PROVIDERS.find((provider) => provider.id === currentProvider) || PROVIDERS[0];
+  const addToast = useUIStore((state) => state.addToast);
+  const [editingProvider, setEditingProvider] = useState<LLMProvider | null>(null);
+  const [isAddingProvider, setIsAddingProvider] = useState(false);
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customProviderKey, setCustomProviderKey] = useState("");
+  const [isSavingCustomProvider, setIsSavingCustomProvider] = useState(false);
+  const [providerDrafts, setProviderDrafts] = useState<Record<LLMProvider, string>>({
+    anthropic: apiKeys.anthropic || "",
+    openai: apiKeys.openai || "",
+    ollama: llmConfigs.ollama.baseUrl || "http://localhost:11434",
+  });
+
+  useEffect(() => {
+    setProviderDrafts({
+      anthropic: apiKeys.anthropic || "",
+      openai: apiKeys.openai || "",
+      ollama: llmConfigs.ollama.baseUrl || "http://localhost:11434",
+    });
+  }, [apiKeys.anthropic, apiKeys.openai, llmConfigs.ollama.baseUrl]);
+
+  const updateProviderDraft = (provider: LLMProvider, value: string) => {
+    setProviderDrafts((current) => ({
+      ...current,
+      [provider]: value,
+    }));
+  };
+
+  const saveProviderConfig = (provider: LLMProvider) => {
+    const nextValue = providerDrafts[provider].trim();
+    if (provider === "ollama") {
+      setLLMConfig("ollama", { baseUrl: nextValue || "http://localhost:11434" });
+    } else {
+      setApiKey(provider, nextValue || undefined);
+    }
+    setCurrentProvider(provider);
+    setEditingProvider(null);
+  };
+
+  const handleSaveCustomProvider = () => {
+    if (!customProviderKey.trim()) {
+      return;
+    }
+
+    setIsSavingCustomProvider(true);
+    window.setTimeout(() => {
+      addToast({
+        type: "warning",
+        message: "当前版本暂不支持自定义 Provider，已保留与 Slate 一致的设置入口。",
+      });
+      setIsSavingCustomProvider(false);
+      setIsAddingProvider(false);
+      setCustomBaseUrl("");
+      setCustomProviderKey("");
+    }, 400);
+  };
+
   return (
     <motion.div
       key="models"
@@ -510,184 +592,238 @@ function ModelsSettings({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.25 }}
-      className="space-y-10 pb-24"
+      className="max-w-[600px] space-y-12"
     >
       <div>
-        <h2 className="mb-2 text-[24px] font-medium tracking-tight text-zinc-100">AI Models</h2>
-        <p className="text-[14px] text-zinc-500">
-          保持和 Slate 一致的设置层级，直接编辑当前工作区的模型配置。
+        <h2 className="mb-1 text-[20px] font-medium text-zinc-100">AI Models</h2>
+        <p className="text-[13px] text-zinc-500">
+          Configure language models and API providers for the workspace.
         </p>
       </div>
 
-      <section className="space-y-5">
-        <h3 className="text-[12px] font-medium uppercase tracking-widest text-zinc-500">
-          Provider Selection
+      <section className="space-y-4">
+        <h3 className="text-[11px] font-medium uppercase tracking-widest text-zinc-600">
+          Model Routing
         </h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {PROVIDERS.map((provider) => {
-            const active = currentProvider === provider.id;
-            return (
-              <button
-                key={provider.id}
-                onClick={() => setCurrentProvider(provider.id)}
-                className={cn(
-                  "rounded-xl border p-5 text-left transition-all duration-200",
-                  active
-                    ? "border-white/15 bg-white/[0.03] shadow-sm"
-                    : "border-graphite bg-white/[0.01] hover:bg-white/[0.02]"
-                )}
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-lg border text-[15px] font-semibold",
-                        provider.badgeClass
-                      )}
-                    >
-                      {provider.mark}
-                    </div>
-                    <div>
-                      <div className="text-[14px] font-medium text-zinc-200">{provider.name}</div>
-                      <div className="mt-1 text-[12px] text-zinc-500">
-                        {llmConfigs[provider.id].model}
-                      </div>
-                    </div>
-                  </div>
-                  {active && (
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-zinc-300">
-                      Active
-                    </span>
-                  )}
-                </div>
-                <p className="text-[13px] leading-relaxed text-zinc-500">{provider.description}</p>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="space-y-5">
-        <h3 className="text-[12px] font-medium uppercase tracking-widest text-zinc-500">
-          Model Configuration
-        </h3>
-        <div className="space-y-4 rounded-xl border border-graphite bg-[#0a0a0a] p-5">
-          <div className="space-y-2">
-            <label className="text-[13px] text-zinc-500">Model</label>
-            <select
-              value={currentConfig.model}
-              onChange={(event) => setLLMConfig(currentProvider, { model: event.target.value })}
-              className="w-full rounded-lg border border-graphite bg-black/40 px-3 py-2.5 text-[13px] text-zinc-200 focus:border-zinc-500 focus:outline-none"
-            >
-              {PROVIDERS.find((provider) => provider.id === currentProvider)?.models.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="flex items-center justify-between text-[13px] text-zinc-500">
-              <span>Temperature</span>
-              <span className="font-mono text-zinc-400">
-                {(currentConfig.temperature ?? 0.7).toFixed(1)}
-              </span>
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={currentConfig.temperature ?? 0.7}
-              onChange={(event) =>
-                setLLMConfig(currentProvider, {
-                  temperature: parseFloat(event.target.value),
-                })
-              }
-              className="w-full accent-zinc-300"
-            />
-          </div>
-
-          {currentProvider === "ollama" && (
-            <div className="space-y-2">
-              <label className="text-[13px] text-zinc-500">Base URL</label>
-              <input
-                value={currentConfig.baseUrl || ""}
-                onChange={(event) => setLLMConfig("ollama", { baseUrl: event.target.value })}
-                placeholder="http://localhost:11434"
-                className="w-full rounded-lg border border-graphite bg-black/40 px-3 py-2.5 text-[13px] text-zinc-200 focus:border-zinc-500 focus:outline-none placeholder:text-zinc-700"
-              />
+        <div className="space-y-1">
+          <div className="group -mx-3 flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-white/[0.03]">
+            <div className="flex flex-col">
+              <span className="text-[13px] text-zinc-300">Editor Model</span>
+              <span className="text-[11px] text-zinc-500">Fast and concise</span>
             </div>
-          )}
+            <div className="relative">
+              <select
+                value={currentConfig.model}
+                onChange={(event) => setLLMConfig(currentProvider, { model: event.target.value })}
+                className="min-w-[160px] cursor-pointer appearance-none rounded-md border border-white/10 bg-zinc-900 px-3 py-1.5 pr-8 text-[13px] text-zinc-300 transition-colors hover:border-zinc-700 focus:border-zinc-500 focus:outline-none"
+              >
+                {activeProvider.models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M3 4.5L6 7.5L9 4.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div className="group -mx-3 flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-white/[0.03]">
+            <div className="flex flex-col">
+              <span className="text-[13px] text-zinc-300">Agent Model</span>
+              <span className="text-[11px] text-zinc-500">Complex reasoning</span>
+            </div>
+            <div className="relative">
+              <select
+                value={currentConfig.model}
+                onChange={(event) => setLLMConfig(currentProvider, { model: event.target.value })}
+                className="min-w-[160px] cursor-pointer appearance-none rounded-md border border-white/10 bg-zinc-900 px-3 py-1.5 pr-8 text-[13px] text-zinc-300 transition-colors hover:border-zinc-700 focus:border-zinc-500 focus:outline-none"
+              >
+                {activeProvider.models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M3 4.5L6 7.5L9 4.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="space-y-5">
-        <h3 className="text-[12px] font-medium uppercase tracking-widest text-zinc-500">
+      <section className="space-y-4">
+        <h3 className="text-[11px] font-medium uppercase tracking-widest text-zinc-600">
           Providers
         </h3>
-        <div className="space-y-4">
+        <div className="space-y-1">
           {PROVIDERS.map((provider) => {
-            const configured = provider.id === "ollama" || Boolean(apiKeys[provider.id]);
+            const isActive = currentProvider === provider.id;
+            const configured =
+              provider.id === "ollama"
+                ? Boolean((llmConfigs.ollama.baseUrl || "").trim())
+                : Boolean(apiKeys[provider.id]?.trim());
+            const isEditing = editingProvider === provider.id;
+            const draftValue = providerDrafts[provider.id];
+            const detailText =
+              provider.id === "ollama"
+                ? llmConfigs.ollama.baseUrl || "http://localhost:11434"
+                : maskSecret(apiKeys[provider.id]);
+            const placeholder =
+              provider.id === "ollama" ? "http://localhost:11434" : "Enter API Key...";
 
             return (
-              <div
-                key={provider.id}
-                className="flex flex-col gap-5 rounded-xl border border-graphite bg-[#0a0a0a] p-5"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3.5">
-                    <div
-                      className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-lg border text-[16px] font-semibold",
-                        provider.badgeClass
+              <div key={provider.id} className="space-y-2">
+                {configured && !isEditing ? (
+                  <div className="group -mx-3 flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-white/[0.03]">
+                    <div className="flex flex-col">
+                      <span className="text-[13px] text-zinc-300">{provider.name}</span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-emerald-500/80">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/80" />
+                        Connected
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="max-w-[220px] truncate font-mono text-[12px] text-zinc-600">
+                        {detailText}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setCurrentProvider(provider.id);
+                          setEditingProvider(provider.id);
+                        }}
+                        className="rounded px-2 py-1 text-[12px] text-zinc-500 opacity-0 transition-colors hover:text-zinc-300 group-hover:opacity-100"
+                      >
+                        {provider.id === "ollama" && !isActive ? "Use" : "Replace"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="group -mx-3 flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-white/[0.03]">
+                    <div className="flex flex-col">
+                      <span className="text-[13px] text-zinc-300">{provider.name}</span>
+                      <span className="mt-0.5 text-[11px] text-zinc-600">
+                        {provider.id === "ollama" ? "Local runtime" : "Not connected"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type={provider.id === "ollama" ? "text" : "password"}
+                        value={draftValue}
+                        onChange={(event) => updateProviderDraft(provider.id, event.target.value)}
+                        placeholder={placeholder}
+                        className="w-[180px] rounded-md border border-white/10 bg-zinc-900 px-3 py-1.5 font-mono text-[12px] text-zinc-300 transition-colors placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => saveProviderConfig(provider.id)}
+                        className="rounded-md border border-white/5 bg-white/10 px-3 py-1.5 text-[12px] text-zinc-300 transition-colors hover:bg-white/20"
+                      >
+                        Save
+                      </button>
+                      {isEditing && (
+                        <button
+                          onClick={() => setEditingProvider(null)}
+                          className="px-2 py-1 text-[12px] text-zinc-500 transition-colors hover:text-zinc-300"
+                        >
+                          Cancel
+                        </button>
                       )}
-                    >
-                      {provider.mark}
-                    </div>
-                    <div>
-                      <h4 className="text-[14px] font-medium text-zinc-200">{provider.name}</h4>
-                      <div className="mt-1 text-[12px] text-zinc-500">
-                        {configured ? "Connected" : "Not configured"}
-                      </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setCurrentProvider(provider.id)}
-                    className="text-[13px] font-medium text-zinc-400 transition-colors hover:text-zinc-200"
-                  >
-                    Use
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3 border-t border-graphite pt-4">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/5">
-                    <Key size={12} className="text-zinc-400" />
-                  </div>
-                  {provider.id === "ollama" ? (
-                    <input
-                      value={llmConfigs.ollama.baseUrl || ""}
-                      onChange={(event) => setLLMConfig("ollama", { baseUrl: event.target.value })}
-                      placeholder="http://localhost:11434"
-                      className="flex-1 bg-transparent text-[13px] text-zinc-400 focus:outline-none placeholder:text-zinc-600"
-                    />
-                  ) : (
-                    <input
-                      type="password"
-                      value={apiKeys[provider.id] || ""}
-                      onChange={(event) => setApiKey(provider.id, event.target.value || undefined)}
-                      placeholder={provider.id === "anthropic" ? "sk-ant-..." : "sk-proj-..."}
-                      className="flex-1 bg-transparent text-[13px] text-zinc-400 focus:outline-none placeholder:text-zinc-600"
-                    />
-                  )}
-                  <span className="rounded-md border border-white/5 bg-white/5 px-3 py-1.5 text-[12px] font-medium text-zinc-300">
-                    自动保存
-                  </span>
-                </div>
+                )}
               </div>
             );
           })}
+
+          <AnimatePresence initial={false}>
+            {isAddingProvider && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 mb-4 flex flex-col gap-4 rounded-lg border border-white/5 bg-white/[0.01] px-3 py-4">
+                  <div>
+                    <h4 className="text-[13px] font-medium text-zinc-300">Custom Provider</h4>
+                    <p className="mt-0.5 text-[11px] text-zinc-500">OpenAI-compatible API endpoint</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <label className="w-20 flex-shrink-0 text-[12px] text-zinc-400">Base URL</label>
+                      <input
+                        type="text"
+                        value={customBaseUrl}
+                        onChange={(event) => setCustomBaseUrl(event.target.value)}
+                        placeholder="https://api.openai.com/v1"
+                        className="flex-1 border-b border-white/10 bg-transparent pb-1.5 font-mono text-[12px] text-zinc-300 transition-colors placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="w-20 flex-shrink-0 text-[12px] text-zinc-400">API Key</label>
+                      <input
+                        type="password"
+                        value={customProviderKey}
+                        onChange={(event) => setCustomProviderKey(event.target.value)}
+                        placeholder="sk-..."
+                        className="flex-1 border-b border-white/10 bg-transparent pb-1.5 font-mono text-[12px] text-zinc-300 transition-colors placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      onClick={() => setIsAddingProvider(false)}
+                      className="text-[12px] text-zinc-500 transition-colors hover:text-zinc-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveCustomProvider}
+                      disabled={!customProviderKey.trim() || isSavingCustomProvider}
+                      className="text-[12px] font-medium text-zinc-300 transition-colors hover:text-white disabled:opacity-50"
+                    >
+                      {isSavingCustomProvider ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {!isAddingProvider && (
+            <div className="px-3 pt-2">
+              <button
+                onClick={() => setIsAddingProvider(true)}
+                className="flex items-center gap-1.5 text-[12px] text-zinc-500 transition-colors hover:text-zinc-300"
+              >
+                <Plus size={12} />
+                Add Provider
+              </button>
+            </div>
+          )}
         </div>
       </section>
     </motion.div>
@@ -729,83 +865,32 @@ function MCPSettings({
     () => servers.find((server) => server.id === draft.id && server.scope === draft.scope) || null,
     [draft.id, draft.scope, servers]
   );
-  const scopePathHint =
-    draft.scope === "project" && currentProject
-      ? `${currentProject.path}\\.slate\\mcps.json`
-      : "~/.slate/mcps.json";
-  const scopePathLabel =
-    draft.scope === "project" && currentProject
-      ? "Current project/.slate/mcps.json"
-      : "~/.slate/mcps.json";
 
   const getServerMeta = (server: McpServerStatus) => {
+    const items = [server.transportSummary];
+
     if (server.status === "connected") {
-      return (
-        <div className="flex items-center gap-3 text-[11px] font-medium text-zinc-500">
-          <span className="flex items-center gap-1.5">
-            <Link2 size={12} className="text-zinc-400" />
-            {server.toolCount} Tools
-          </span>
-          {server.capabilities.prompts && (
-            <span className="flex items-center gap-1.5">
-              <Link2 size={12} className="text-zinc-400" />
-              Prompts
-            </span>
-          )}
-          {server.capabilities.resources && (
-            <span className="flex items-center gap-1.5">
-              <Link2 size={12} className="text-zinc-400" />
-              Resources
-            </span>
-          )}
-        </div>
-      );
+      items.push(`${server.toolCount} Tools`);
     }
 
-    return (
-      <div className="flex items-center gap-3 text-[11px] font-medium text-zinc-600">
-        <span className="flex items-center gap-1.5">
-          {server.status === "approvalRequired"
-            ? "Awaiting Approval"
-            : server.status === "connecting"
-            ? "Connecting"
-            : server.status === "disabled"
-            ? "Disabled"
-            : server.status === "unsupported"
-            ? "Unsupported"
-            : server.status === "error"
-            ? "Error"
-            : "Offline"}
-        </span>
-      </div>
-    );
+    return items;
   };
 
   const renderServerActions = (server: McpServerStatus) => {
     if (server.status === "connected") {
       return (
-        <div className="flex items-center gap-1 sm:-translate-x-2 sm:opacity-0 sm:transition-all sm:duration-300 group-hover:translate-x-0 group-hover:opacity-100">
+        <div className="absolute right-4 flex items-center gap-1 bg-[#050505] pl-2 opacity-0 shadow-[0_0_12px_8px_#050505] transition-opacity group-hover:opacity-100">
           <button
             onClick={() => void handleRetryServer(server)}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-zinc-400 shadow-sm transition-colors hover:border-white/5 hover:bg-white/10 hover:text-zinc-100"
-            title="Restart Server"
+            className="px-2 py-1 text-[12px] text-zinc-500 transition-colors hover:text-zinc-300"
           >
-            <Power size={14} />
+            Restart
           </button>
           <button
             onClick={() => openEditForm(server)}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-zinc-400 shadow-sm transition-colors hover:border-white/5 hover:bg-white/10 hover:text-zinc-100"
-            title="Configure"
+            className="px-2 py-1 text-[12px] text-zinc-500 transition-colors hover:text-zinc-300"
           >
-            <Settings2 size={14} />
-          </button>
-          <div className="mx-1 h-3 w-px bg-white/10" />
-          <button
-            onClick={() => void handleDeleteServer(server)}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-red-400/70 shadow-sm transition-colors hover:border-red-400/20 hover:bg-red-400/10 hover:text-red-400"
-            title="Remove"
-          >
-            <Trash2 size={14} />
+            Config
           </button>
         </div>
       );
@@ -820,6 +905,8 @@ function MCPSettings({
         ? "Connecting"
         : server.status === "unsupported"
         ? null
+        : server.status === "error"
+        ? "Retry"
         : "Connect";
 
     const primaryAction =
@@ -831,19 +918,21 @@ function MCPSettings({
         ? null
         : server.status === "unsupported"
         ? null
+        : server.status === "error"
+        ? () => handleRetryServer(server)
         : () => handleRetryServer(server);
 
     return (
-      <div className="flex items-center gap-1.5 sm:-translate-x-2 sm:opacity-0 sm:transition-all sm:duration-300 group-hover:translate-x-0 group-hover:opacity-100">
+      <div className="absolute right-4 flex items-center gap-2 bg-[#050505] pl-2 opacity-0 shadow-[0_0_12px_8px_#050505] transition-opacity group-hover:opacity-100">
         {primaryLabel && (
           <button
             onClick={() => primaryAction && void primaryAction()}
             disabled={server.status === "connecting"}
             className={cn(
-              "flex h-7 items-center justify-center rounded-md border px-2.5 text-[11px] font-medium shadow-sm transition-colors",
+              "rounded border border-white/5 px-3 py-1 text-[12px] transition-colors",
               server.status === "connecting"
                 ? "cursor-not-allowed border-white/5 bg-white/5 text-zinc-500"
-                : "border-white/5 bg-white/10 text-zinc-200 hover:bg-white/15"
+                : "bg-white/10 text-zinc-200 hover:bg-white/15"
             )}
           >
             {primaryLabel}
@@ -851,10 +940,9 @@ function MCPSettings({
         )}
         <button
           onClick={() => openEditForm(server)}
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-zinc-500 shadow-sm transition-colors hover:border-white/5 hover:bg-white/10 hover:text-zinc-300"
-          title="Configure"
+          className="px-2 py-1 text-[12px] text-zinc-500 transition-colors hover:text-zinc-300"
         >
-          <Settings2 size={14} />
+          Config
         </button>
       </div>
     );
@@ -879,7 +967,6 @@ function MCPSettings({
           </div>
           <p className="max-w-[420px] text-[13px] leading-relaxed text-zinc-500">
             Expand your Agent&apos;s capabilities by connecting to external tools, databases, and local file systems.
-            {isLoading ? " Syncing runtime status..." : tools.length > 0 ? ` ${tools.length} tools available.` : ""}
           </p>
         </div>
 
@@ -911,93 +998,65 @@ function MCPSettings({
         {formOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0, overflow: "hidden" }}
-            animate={{ opacity: 1, height: "auto", overflow: "visible" }}
+            animate={{ opacity: 1, height: "auto", overflow: "hidden" }}
             exit={{ opacity: 0, height: 0, overflow: "hidden" }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="overflow-hidden rounded-xl border border-white/10 bg-[#0f0f0f]/80"
+            className="flex flex-col overflow-hidden rounded-xl border border-white/5 bg-black/20"
           >
-            <div className="flex items-center justify-between border-b border-white/5 bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between border-b border-white/5 px-3 py-2.5">
               <div className="flex items-center gap-2">
-                <Terminal size={14} className="text-zinc-400" />
-                <h3 className="text-[13px] font-medium text-zinc-200">Server Configuration</h3>
+                <Terminal size={14} className="text-zinc-500" />
+                <h3 className="text-[12px] font-medium text-zinc-300">Server Configuration</h3>
               </div>
-              <span className="text-[11px] font-mono text-zinc-500">JSON</span>
+              <span className="text-[10px] font-mono tracking-wider text-zinc-500">JSON</span>
             </div>
 
-            <div className="p-4">
-              <textarea
-                value={configText}
-                onChange={(event) => setConfigText(event.target.value)}
-                spellCheck={false}
-                className="custom-scrollbar h-[220px] w-full resize-y rounded-lg border border-white/10 bg-black/40 p-4 font-mono text-[13px] leading-relaxed text-zinc-300 transition-all placeholder:text-zinc-700 focus:border-zinc-500 focus:bg-black/60 focus:outline-none"
-              />
-            </div>
+            <textarea
+              value={configText}
+              onChange={(event) => setConfigText(event.target.value)}
+              spellCheck={false}
+              className="custom-scrollbar block h-[180px] w-full resize-y border-none bg-transparent p-3 font-mono text-[12px] leading-relaxed text-zinc-300 transition-colors placeholder:text-zinc-700 focus:bg-white/[0.01] focus:outline-none"
+            />
 
-            <div className="flex flex-col gap-4 border-t border-white/5 bg-black/20 p-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-1 flex-col gap-3">
-                <p className="text-[11px] leading-5 text-zinc-500">
-                  Paste your MCP server configuration JSON snippet above.
-                </p>
-                <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3.5 py-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 flex-col gap-2">
-                      <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.22em] text-zinc-600">
-                        Save Scope
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-3 py-2">
-                          <select
-                            value={draft.scope}
-                            onChange={(event) =>
-                              setDraft((current) => ({
-                                ...current,
-                                scope: event.target.value as McpConfigScope,
-                              }))
-                            }
-                            className="min-w-[176px] bg-transparent text-[12px] font-medium text-zinc-200 focus:outline-none"
-                          >
-                            {scopeOptions.map((scope) => (
-                              <option key={scope.value} value={scope.value}>
-                                {scope.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        {currentProject && draft.scope === "project" && (
-                          <span className="rounded-full border border-white/5 bg-white/[0.04] px-2.5 py-1 text-[11px] text-zinc-400">
-                            {currentProject.name}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="min-w-0 text-[11px] text-zinc-500 sm:text-right">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">
-                        Write Target
-                      </div>
-                      <div className="mt-1 truncate text-zinc-400" title={scopePathHint}>
-                        {scopePathLabel}
-                      </div>
-                    </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 bg-black/40 px-3 py-2.5">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="text-[11px] text-zinc-500">Paste your MCP server configuration JSON above.</p>
+                {currentProject && (
+                  <div className="rounded-md border border-white/8 bg-white/[0.03] px-2.5 py-1">
+                    <select
+                      value={draft.scope}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          scope: event.target.value as McpConfigScope,
+                        }))
+                      }
+                      className="bg-transparent text-[11px] text-zinc-400 focus:outline-none"
+                    >
+                      {scopeOptions.map((scope) => (
+                        <option key={scope.value} value={scope.value}>
+                          {scope.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
+                )}
               </div>
 
-              <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+              <div className="flex items-center gap-2">
                 {editingServer && (
                   <button
                     onClick={() => void handleDeleteServer(editingServer)}
-                    className="w-full rounded-lg border border-red-400/10 px-3 py-2 text-[13px] font-medium text-red-400/80 transition-colors hover:bg-red-400/10 hover:text-red-400 sm:w-auto"
+                    className="px-2 py-1 text-[12px] text-red-400/70 transition-colors hover:text-red-400"
                   >
                     Delete
                   </button>
                 )}
                 <button
                   onClick={() => void handleSaveServer()}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 py-2 text-[13px] font-medium text-zinc-900 shadow-sm transition-colors hover:bg-white sm:w-auto"
+                  className="rounded-md bg-zinc-200 px-3 py-1.5 text-[12px] font-medium text-zinc-900 transition-colors hover:bg-white"
                 >
-                  <Save size={14} />
-                  Save Configuration
+                  Save Config
                 </button>
               </div>
             </div>
@@ -1020,7 +1079,7 @@ function MCPSettings({
           />
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-1">
           {filteredServers.length === 0 ? (
             <div className="rounded-xl border border-dashed border-zinc-800 bg-white/[0.01] p-5 text-[13px] text-zinc-500">
               {servers.length === 0
@@ -1031,62 +1090,63 @@ function MCPSettings({
             filteredServers.map((server) => (
               <div
                 key={`${server.scope}-${server.id}`}
-                className="group relative flex flex-col gap-4 overflow-hidden rounded-xl border border-white/5 bg-white/[0.01] p-3 transition-all duration-300 hover:border-white/10 hover:bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between"
+                className="group relative flex items-center justify-between rounded-lg p-3 -mx-3 transition-colors hover:bg-white/[0.03]"
               >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-gradient-to-b from-zinc-800 to-zinc-900 shadow-sm">
-                    {server.transportType === "stdio" ? (
-                      <Terminal
-                        size={16}
-                        className={server.status === "connected" ? "text-zinc-300" : "text-zinc-500"}
-                      />
-                    ) : (
-                      <Plug size={16} className="text-zinc-500" />
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className={cn(
+                      "h-8 w-8 flex-shrink-0 rounded-md border border-white/5 flex items-center justify-center",
+                      server.status === "connected" ? "bg-zinc-900" : "bg-zinc-900/50 opacity-70"
                     )}
-                    <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#0a0a0a]">
-                      <div className={cn("h-1.5 w-1.5 rounded-full", statusDot(server.status))} />
-                    </div>
+                  >
+                    {server.transportType === "stdio" ? (
+                      <Terminal size={14} className={server.status === "connected" ? "text-zinc-500" : "text-zinc-600"} />
+                    ) : (
+                      <Plug size={14} className="text-zinc-600" />
+                    )}
                   </div>
 
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex min-w-0 flex-col gap-0.5">
                     <div className="flex items-center gap-2">
-                      <h3
+                      <span
                         className={cn(
-                          "truncate text-[14px] font-medium leading-none",
-                          server.status === "connected" ? "text-zinc-100" : "text-zinc-400"
+                          "truncate text-[13px] font-medium",
+                          server.status === "connected" ? "text-zinc-300" : "text-zinc-400"
                         )}
                       >
                         {server.name}
-                      </h3>
-                      <span className="rounded border border-white/5 bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-zinc-400">
-                        {server.transportType}
                       </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("h-1.5 w-1.5 rounded-full", statusDot(server.status))} />
+                        <span className={cn("text-[11px]", server.status === "connected" ? "text-zinc-500" : "text-zinc-600")}>
+                          {describeMcpStatus(server.status)}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          "max-w-[200px] truncate font-mono text-[11px] xl:max-w-[320px]",
-                          server.status === "connected" ? "text-zinc-500" : "text-zinc-600"
-                        )}
-                      >
-                        {server.transportSummary}
-                      </div>
-                      <div className="h-1 w-1 rounded-full bg-zinc-700/50" />
-                      {getServerMeta(server)}
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 text-[11px]",
+                        server.status === "connected" ? "text-zinc-600" : "text-zinc-600/70"
+                      )}
+                    >
+                      {getServerMeta(server).map((item, index) => (
+                        <span key={`${server.id}-${item}-${index}`} className="flex items-center gap-2">
+                          {index > 0 && <span>·</span>}
+                          <span className={index === 0 ? "font-mono" : undefined}>{item}</span>
+                        </span>
+                      ))}
                     </div>
+
+                    {(server.error || server.unsupportedReason) && (
+                      <div className="max-w-[420px] truncate text-[11px] text-red-400/70">
+                        {server.error || server.unsupportedReason}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {renderServerActions(server)}
-
-                {(server.error || server.unsupportedReason) && (
-                  <div className="sm:basis-full sm:pl-12">
-                    <div className="rounded-lg border border-red-500/10 bg-red-500/5 px-3 py-2 text-[12px] text-zinc-300">
-                      {server.error || server.unsupportedReason}
-                    </div>
-                  </div>
-                )}
               </div>
             ))
           )}
