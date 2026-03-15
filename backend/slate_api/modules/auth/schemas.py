@@ -13,6 +13,7 @@ class UserRead(BaseModel):
     id: UUID
     email: str | None
     username: str
+    avatar_url: str | None = None
     is_active: bool
     created_at: datetime
 

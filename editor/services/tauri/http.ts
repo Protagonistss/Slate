@@ -6,6 +6,30 @@ const isTauri =
   typeof window !== 'undefined' &&
   ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
+function getThrownMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    if ('message' in error && typeof error.message === 'string' && error.message.trim()) {
+      return error.message;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return fallback;
+    }
+  }
+
+  return fallback;
+}
+
 export interface FetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   headers?: Record<string, string>;
@@ -31,13 +55,18 @@ export async function fetchWithTauri(
 
   if (isTauri) {
     const tauriHttp = await import('@tauri-apps/plugin-http');
+    let response: Response;
 
-    const response = await tauriHttp.fetch(url, {
-      method,
-      headers,
-      body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
-      connectTimeout: timeout || 30000,
-    });
+    try {
+      response = await tauriHttp.fetch(url, {
+        method,
+        headers,
+        body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
+        connectTimeout: timeout || 30000,
+      });
+    } catch (error) {
+      throw new Error(getThrownMessage(error, `请求失败：${url}`));
+    }
 
     // 将 Headers 转换为 Record
     const headersObj: Record<string, string> = {};
@@ -67,12 +96,18 @@ export async function fetchWithTauri(
   }
 
   // 浏览器环境降级
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
-    signal: timeout ? AbortSignal.timeout(timeout) : undefined,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
+      signal: timeout ? AbortSignal.timeout(timeout) : undefined,
+    });
+  } catch (error) {
+    throw new Error(getThrownMessage(error, `请求失败：${url}`));
+  }
 
   const data = await response.json().catch(() => null);
 

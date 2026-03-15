@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
 import {
   PencilLine,
   Bot,
@@ -24,6 +25,7 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
   const location = useLocation();
   const navigate = useNavigate();
   const authUser = useAuthStore((state) => state.user);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const isEditor = location.pathname === "/editor";
   const isAgent = location.pathname === "/agent";
   const isHome = location.pathname === "/";
@@ -50,6 +52,11 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
   };
 
   const userInitial = authUser?.username.trim().charAt(0).toUpperCase() || "";
+  const showAvatarImage = Boolean(authUser?.avatarUrl && !avatarFailed);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [authUser?.avatarUrl]);
 
   return (
     <header
@@ -121,7 +128,14 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
           className="h-8 w-8 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center hover:bg-zinc-700 hover:border-zinc-600 transition-all cursor-pointer select-none"
           title={authUser ? "打开账号设置" : "登录与账号设置"}
         >
-          {authUser ? (
+          {showAvatarImage ? (
+            <img
+              src={authUser?.avatarUrl ?? ""}
+              alt={authUser?.username || "User avatar"}
+              className="h-full w-full object-cover"
+              onError={() => setAvatarFailed(true)}
+            />
+          ) : authUser ? (
             <span className="text-[12px] font-semibold text-zinc-100">{userInitial}</span>
           ) : (
             <User size={16} className="text-zinc-300" />

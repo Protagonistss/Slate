@@ -335,7 +335,11 @@ function statusDot(status: McpServerStatus["status"]) {
 interface AccountSettingsProps {
   user: AuthUser | null;
   currentOAuthProvider: OAuthProvider | null;
-  isLoading: boolean;
+  pendingAction: "signOut" | null;
+  pendingProviderAction: {
+    provider: OAuthProvider;
+    action: "connect" | "disconnect";
+  } | null;
   backendBaseUrl: string;
   onConnect: (provider: OAuthProvider) => Promise<void>;
   onDisconnect: (provider: OAuthProvider) => Promise<void>;
@@ -346,7 +350,8 @@ interface AccountSettingsProps {
 function AccountSettings({
   user,
   currentOAuthProvider,
-  isLoading,
+  pendingAction,
+  pendingProviderAction,
   backendBaseUrl,
   onConnect,
   onDisconnect,
@@ -355,6 +360,12 @@ function AccountSettings({
 }: AccountSettingsProps) {
   const isSignedIn = Boolean(user);
   const avatarText = (user?.username.trim().charAt(0) || "S").toUpperCase();
+  const isSigningOut = pendingAction === "signOut";
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [user?.avatarUrl]);
 
   return (
     <motion.div
@@ -375,7 +386,16 @@ function AccountSettings({
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-800 text-[13px] font-semibold text-zinc-200">
-              {avatarText}
+              {user?.avatarUrl && !avatarFailed ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.username || "User avatar"}
+                  className="h-full w-full object-cover"
+                  onError={() => setAvatarFailed(true)}
+                />
+              ) : (
+                avatarText
+              )}
             </div>
             <div>
               <div className="text-[13px] font-medium text-zinc-300">
@@ -389,10 +409,10 @@ function AccountSettings({
           {isSignedIn ? (
             <button
               onClick={() => void onSignOut()}
-              disabled={isLoading}
+              disabled={isSigningOut || pendingProviderAction !== null}
               className="text-[12px] text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isLoading ? "Signing out..." : "Sign Out"}
+              {isSigningOut ? "Signing out..." : "Sign Out"}
             </button>
           ) : (
             <span className="text-[12px] text-zinc-600">Backend OAuth</span>
@@ -415,6 +435,10 @@ function AccountSettings({
           {ACCOUNT_PROVIDERS.map((provider) => {
             const isConnected = currentOAuthProvider === provider.id && isSignedIn;
             const handle = isConnected ? `(@${user?.username})` : null;
+            const isPendingProvider =
+              pendingProviderAction?.provider === provider.id ? pendingProviderAction.action : null;
+            const isAnyAccountActionPending =
+              isSigningOut || pendingProviderAction !== null;
 
             return (
               <div key={provider.id} className="flex items-center justify-between gap-4">
@@ -428,18 +452,18 @@ function AccountSettings({
                 {isConnected ? (
                   <button
                     onClick={() => void onDisconnect(provider.id)}
-                    disabled={isLoading}
+                    disabled={isAnyAccountActionPending}
                     className="text-[12px] text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading ? "Disconnecting..." : "Disconnect"}
+                    {isPendingProvider === "disconnect" ? "Disconnecting..." : "Disconnect"}
                   </button>
                 ) : (
                   <button
                     onClick={() => void onConnect(provider.id)}
-                    disabled={isLoading}
+                    disabled={isAnyAccountActionPending}
                     className="text-[12px] text-zinc-300 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading ? "Connecting..." : "Connect"}
+                    {isPendingProvider === "connect" ? "Connecting..." : "Connect"}
                   </button>
                 )}
               </div>
@@ -1091,6 +1115,11 @@ export function SettingsView() {
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<McpServerDraft>(emptyDraft("global"));
   const [configText, setConfigText] = useState<string>(() => draftToSnippet(emptyDraft("global")));
+  const [pendingAccountAction, setPendingAccountAction] = useState<"signOut" | null>(null);
+  const [pendingProviderAction, setPendingProviderAction] = useState<{
+    provider: OAuthProvider;
+    action: "connect" | "disconnect";
+  } | null>(null);
 
   const llmConfigs = useConfigStore((state) => state.llmConfigs);
   const currentProvider = useConfigStore((state) => state.currentProvider);
@@ -1113,13 +1142,13 @@ export function SettingsView() {
   const clearError = useMcpStore((state) => state.clearError);
   const authUser = useAuthStore((state) => state.user);
   const currentOAuthProvider = useAuthStore((state) => state.currentOAuthProvider);
-  const authLoading = useAuthStore((state) => state.isLoading);
   const authError = useAuthStore((state) => state.error);
   const beginOAuth = useAuthStore((state) => state.beginOAuth);
   const completeOAuthCallback = useAuthStore((state) => state.completeOAuthCallback);
   const signOut = useAuthStore((state) => state.signOut);
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
   const clearAuthError = useAuthStore((state) => state.clearError);
+  const authUserId = authUser?.id ?? null;
 
   useEffect(() => {
     if (!initialized) {
@@ -1167,7 +1196,7 @@ export function SettingsView() {
     void refreshProfile().catch(() => {
       // 错误交给 authStore 的 error/toast 链路处理。
     });
-  }, [activeTab, authUser, refreshProfile]);
+  }, [activeTab, authUserId, refreshProfile]);
 
   const normalizedConfigs = useMemo(
     () =>
@@ -1395,6 +1424,7 @@ export function SettingsView() {
     }
 
     try {
+      setPendingProviderAction({ provider, action: "connect" });
       const redirectTo = isTauriEnvironment()
         ? `slate://auth/callback?provider=${provider}`
         : `${window.location.origin}/settings?tab=account&provider=${provider}`;
@@ -1410,6 +1440,8 @@ export function SettingsView() {
         type: "error",
         message: error instanceof Error ? error.message : `连接 ${provider} 失败`,
       });
+    } finally {
+      setPendingProviderAction(null);
     }
   };
 
@@ -1422,19 +1454,29 @@ export function SettingsView() {
       return;
     }
 
-    await signOut();
-    addToast({
-      type: "success",
-      message: `已断开 ${provider} 当前会话。`,
-    });
+    try {
+      setPendingProviderAction({ provider, action: "disconnect" });
+      await signOut();
+      addToast({
+        type: "success",
+        message: `已断开 ${provider} 当前会话。`,
+      });
+    } finally {
+      setPendingProviderAction(null);
+    }
   };
 
   const handleSignOut = async () => {
-    await signOut();
-    addToast({
-      type: "success",
-      message: "已退出当前账号。",
-    });
+    try {
+      setPendingAccountAction("signOut");
+      await signOut();
+      addToast({
+        type: "success",
+        message: "已退出当前账号。",
+      });
+    } finally {
+      setPendingAccountAction(null);
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -1485,7 +1527,8 @@ export function SettingsView() {
           <AccountSettings
             user={authUser}
             currentOAuthProvider={currentOAuthProvider}
-            isLoading={authLoading}
+            pendingAction={pendingAccountAction}
+            pendingProviderAction={pendingProviderAction}
             backendBaseUrl={getBackendBaseUrl()}
             onConnect={handleConnectAccount}
             onDisconnect={handleDisconnectAccount}

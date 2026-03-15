@@ -30,6 +30,8 @@ export function AppLayout() {
   const { openProject, closeProject } = useProjectStore();
   const { closeAllFiles } = useEditorStore();
   const completeOAuthExchange = useAuthStore((state) => state.completeOAuthExchange);
+  const lastHandledOAuthTicket = useAuthStore((state) => state.lastHandledOAuthTicket);
+  const hasAuthSession = useAuthStore((state) => Boolean(state.accessToken || state.refreshToken));
   const addToast = useUIStore((state) => state.addToast);
   const processedDeepLinksRef = useRef<Set<string>>(new Set());
 
@@ -60,8 +62,8 @@ export function AppLayout() {
   useEffect(() => {
     let cancelled = false;
 
-    const processUrls = async (urls: string[]) => {
-      for (const url of urls) {
+    const processUrls = async (urls: string[] | null | undefined) => {
+      for (const url of Array.isArray(urls) ? urls : []) {
         if (cancelled || processedDeepLinksRef.current.has(url)) {
           continue;
         }
@@ -83,6 +85,10 @@ export function AppLayout() {
           continue;
         }
 
+        if (payload.ticket === lastHandledOAuthTicket) {
+          continue;
+        }
+
         const result = await completeOAuthExchange(payload.ticket, payload.provider);
         if (cancelled) {
           return;
@@ -90,7 +96,10 @@ export function AppLayout() {
 
         if (result.success) {
           addToast({ type: "success", message: "GitHub 账号已连接。" });
-        } else if (result.error) {
+        } else if (
+          result.error &&
+          !(hasAuthSession && result.error.includes("OAuth 交换票据无效或已过期"))
+        ) {
           addToast({ type: "error", message: result.error });
         }
 
@@ -101,15 +110,27 @@ export function AppLayout() {
     let unsubscribe: (() => void) | undefined;
 
     void (async () => {
-      await processUrls(await getCurrentDeepLinks());
-      unsubscribe = await onDeepLinkOpen(processUrls);
+      try {
+        await processUrls(await getCurrentDeepLinks());
+        unsubscribe = await onDeepLinkOpen(processUrls);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        addToast({
+          type: "error",
+          message:
+            error instanceof Error ? error.message : "处理桌面登录回调时发生未知错误",
+        });
+      }
     })();
 
     return () => {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [addToast, completeOAuthExchange, navigate]);
+  }, [addToast, completeOAuthExchange, hasAuthSession, lastHandledOAuthTicket, navigate]);
 
   return (
     <div className="h-screen w-full bg-obsidian flex flex-col text-zinc-100 overflow-hidden">

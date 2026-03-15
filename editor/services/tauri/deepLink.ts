@@ -4,6 +4,10 @@ const isTauri =
 
 export type DeepLinkListener = (urls: string[]) => void | Promise<void>;
 
+function normalizeDeepLinks(urls: string[] | null | undefined): string[] {
+  return Array.isArray(urls) ? urls : [];
+}
+
 export function isTauriEnvironment(): boolean {
   return isTauri;
 }
@@ -14,7 +18,7 @@ export async function getCurrentDeepLinks(): Promise<string[]> {
   }
 
   const { getCurrent } = await import("@tauri-apps/plugin-deep-link");
-  return getCurrent();
+  return normalizeDeepLinks(await getCurrent());
 }
 
 export async function onDeepLinkOpen(
@@ -26,7 +30,7 @@ export async function onDeepLinkOpen(
 
   const { onOpenUrl } = await import("@tauri-apps/plugin-deep-link");
   const unlisten = await onOpenUrl((urls) => {
-    void listener(urls);
+    void listener(normalizeDeepLinks(urls));
   });
   return () => {
     void unlisten();

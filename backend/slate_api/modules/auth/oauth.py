@@ -165,6 +165,17 @@ def _derive_username(db: Session, preferred: str) -> str:
     return candidate
 
 
+def _extract_avatar_url(provider: str, profile: dict[str, Any]) -> str | None:
+    if provider in {"github", "gitee"}:
+        avatar_url = profile.get("avatar_url")
+    elif provider == "google":
+        avatar_url = profile.get("picture")
+    else:
+        avatar_url = None
+
+    return avatar_url if isinstance(avatar_url, str) and avatar_url.strip() else None
+
+
 def upsert_oauth_user(
     db: Session,
     *,
@@ -177,6 +188,9 @@ def upsert_oauth_user(
     if not subject:
         raise OAuthError(f"{provider} 返回的用户标识为空")
 
+    email = profile.get("email")
+    avatar_url = _extract_avatar_url(provider, profile)
+
     identity = db.execute(
         select(AuthIdentity).where(
             AuthIdentity.provider == provider,
@@ -188,9 +202,16 @@ def upsert_oauth_user(
         user = db.get(User, identity.user_id)
         if user is None:
             raise OAuthError("OAuth identity 关联用户不存在")
+        if email and user.email != email:
+            user.email = email
+        if avatar_url and user.avatar_url != avatar_url:
+            user.avatar_url = avatar_url
+        if email and identity.email != email:
+            identity.email = email
+        db.commit()
+        db.refresh(user)
         return issue_token_pair(db, user, user_agent=user_agent, ip_address=ip_address)
 
-    email = profile.get("email")
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none() if email else None
 
     if user is None:
@@ -203,11 +224,15 @@ def upsert_oauth_user(
         user = User(
             email=email,
             username=_derive_username(db, preferred_name),
+            avatar_url=avatar_url,
             password_hash=None,
             is_active=True,
         )
         db.add(user)
         db.flush()
+    else:
+        if avatar_url and user.avatar_url != avatar_url:
+            user.avatar_url = avatar_url
 
     identity = AuthIdentity(
         user_id=user.id,

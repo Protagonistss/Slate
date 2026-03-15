@@ -17,6 +17,7 @@ interface AuthState {
   refreshToken: string | null;
   tokenType: string | null;
   currentOAuthProvider: OAuthProvider | null;
+  lastHandledOAuthTicket: string | null;
   isLoading: boolean;
   error: string | null;
   beginOAuth: (provider: OAuthProvider, redirectTo: string) => Promise<string>;
@@ -49,6 +50,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       ...resettableState,
+      lastHandledOAuthTicket: null,
 
       beginOAuth: async (provider, redirectTo) => {
         set({ isLoading: true, error: null });
@@ -76,16 +78,23 @@ export const useAuthStore = create<AuthState>()(
             refreshToken: session.refreshToken,
             tokenType: session.tokenType,
             currentOAuthProvider: provider,
+            lastHandledOAuthTicket: ticket,
             isLoading: false,
             error: null,
           });
           return { success: true };
         } catch (error) {
           const message = error instanceof Error ? error.message : "完成桌面 OAuth 登录失败";
-          set({
-            ...resettableState,
+          set((state) => ({
+            user: state.user,
+            accessToken: state.accessToken,
+            refreshToken: state.refreshToken,
+            tokenType: state.tokenType,
+            currentOAuthProvider: state.currentOAuthProvider,
+            lastHandledOAuthTicket: state.lastHandledOAuthTicket,
+            isLoading: false,
             error: message,
-          });
+          }));
           return { success: false, error: message };
         }
       },
@@ -117,10 +126,16 @@ export const useAuthStore = create<AuthState>()(
           return { success: true };
         } catch (error) {
           const message = error instanceof Error ? error.message : "完成 OAuth 登录失败";
-          set({
-            ...resettableState,
+          set((state) => ({
+            user: state.user,
+            accessToken: state.accessToken,
+            refreshToken: state.refreshToken,
+            tokenType: state.tokenType,
+            currentOAuthProvider: state.currentOAuthProvider,
+            lastHandledOAuthTicket: state.lastHandledOAuthTicket,
+            isLoading: false,
             error: message,
-          });
+          }));
           return { success: false, error: message };
         }
       },
@@ -161,7 +176,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         if (!refreshToken) {
-          set({ ...resettableState });
+          set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket }));
           return;
         }
 
@@ -177,7 +192,7 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch {
-          set({ ...resettableState });
+          set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket }));
         }
       },
 
@@ -191,10 +206,10 @@ export const useAuthStore = create<AuthState>()(
           // 退出登录时即使后端失败，也清理本地会话。
         }
 
-        set({ ...resettableState });
+        set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket }));
       },
 
-      clearSession: () => set({ ...resettableState }),
+      clearSession: () => set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket })),
       clearError: () => set({ error: null }),
     }),
     {
@@ -205,6 +220,7 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         tokenType: state.tokenType,
         currentOAuthProvider: state.currentOAuthProvider,
+        lastHandledOAuthTicket: state.lastHandledOAuthTicket,
       }),
     }
   )

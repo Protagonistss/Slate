@@ -6,6 +6,7 @@ interface BackendUser {
   id: string;
   email: string | null;
   username: string;
+  avatar_url?: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -32,6 +33,7 @@ export interface AuthUser {
   id: string;
   email: string | null;
   username: string;
+  avatarUrl: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -57,13 +59,21 @@ export interface OAuthDeepLinkPayload {
   error: string | null;
 }
 
+const isTauri =
+  typeof window !== "undefined" &&
+  ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+
 const backendBaseUrl = (() => {
   const envValue =
     typeof import.meta !== "undefined" && typeof import.meta.env.VITE_BACKEND_URL === "string"
       ? import.meta.env.VITE_BACKEND_URL.trim()
       : "";
 
-  return (envValue || "http://localhost:8000/api/v1").replace(/\/+$/, "");
+  const defaultBaseUrl = isTauri
+    ? "http://127.0.0.1:8000/api/v1"
+    : "http://localhost:8000/api/v1";
+
+  return (envValue || defaultBaseUrl).replace(/\/+$/, "");
 })();
 
 function buildUrl(path: string): string {
@@ -83,6 +93,7 @@ function mapUser(user: BackendUser): AuthUser {
     id: user.id,
     email: user.email,
     username: user.username,
+    avatarUrl: user.avatar_url ?? null,
     isActive: user.is_active,
     createdAt: user.created_at,
   };
@@ -147,7 +158,18 @@ export async function requestOAuthAuthorizationUrl(
   const url = new URL(buildUrl(`/auth/oauth/${provider}/start`));
   url.searchParams.set("redirect_to", redirectTo);
 
-  const response = await get(url.toString());
+  let response;
+
+  try {
+    response = await get(url.toString());
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : `连接后端失败，请确认 ${backendBaseUrl} 已启动`;
+    throw new Error(message);
+  }
+
   if (!response.ok || !response.data || typeof response.data !== "object") {
     throw new Error(
       getErrorMessage(response.status, response.data, `获取 ${provider} OAuth 授权地址失败`)
