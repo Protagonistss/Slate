@@ -336,13 +336,9 @@ interface AccountSettingsProps {
   user: AuthUser | null;
   currentOAuthProvider: OAuthProvider | null;
   pendingAction: "signOut" | null;
-  pendingProviderAction: {
-    provider: OAuthProvider;
-    action: "connect" | "disconnect";
-  } | null;
+  pendingOAuthProvider: OAuthProvider | null;
   backendBaseUrl: string;
   onConnect: (provider: OAuthProvider) => Promise<void>;
-  onDisconnect: (provider: OAuthProvider) => Promise<void>;
   onSignOut: () => Promise<void>;
   onDeleteAccount: () => void;
 }
@@ -351,10 +347,9 @@ function AccountSettings({
   user,
   currentOAuthProvider,
   pendingAction,
-  pendingProviderAction,
+  pendingOAuthProvider,
   backendBaseUrl,
   onConnect,
-  onDisconnect,
   onSignOut,
   onDeleteAccount,
 }: AccountSettingsProps) {
@@ -409,7 +404,7 @@ function AccountSettings({
           {isSignedIn ? (
             <button
               onClick={() => void onSignOut()}
-              disabled={isSigningOut || pendingProviderAction !== null}
+              disabled={isSigningOut || pendingOAuthProvider !== null}
               className="text-[12px] text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSigningOut ? "Signing out..." : "Sign Out"}
@@ -432,38 +427,31 @@ function AccountSettings({
         </div>
 
         <div className="space-y-4">
-          {ACCOUNT_PROVIDERS.map((provider) => {
+          {(isSignedIn && currentOAuthProvider
+            ? ACCOUNT_PROVIDERS.filter((provider) => provider.id === currentOAuthProvider)
+            : ACCOUNT_PROVIDERS
+          ).map((provider) => {
             const isConnected = currentOAuthProvider === provider.id && isSignedIn;
             const handle = isConnected ? `(@${user?.username})` : null;
-            const isPendingProvider =
-              pendingProviderAction?.provider === provider.id ? pendingProviderAction.action : null;
-            const isAnyAccountActionPending =
-              isSigningOut || pendingProviderAction !== null;
+            const isPendingProvider = pendingOAuthProvider === provider.id;
+            const isAnyAccountActionPending = isSigningOut || pendingOAuthProvider !== null;
 
             return (
               <div key={provider.id} className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <span className="text-[13px] text-zinc-400">{provider.label}</span>
-                  {handle && (
-                    <span className="font-mono text-[11px] text-zinc-600">{handle}</span>
-                  )}
+                  {handle && <span className="font-mono text-[11px] text-zinc-600">{handle}</span>}
                 </div>
 
-                {isConnected ? (
-                  <button
-                    onClick={() => void onDisconnect(provider.id)}
-                    disabled={isAnyAccountActionPending}
-                    className="text-[12px] text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isPendingProvider === "disconnect" ? "Disconnecting..." : "Disconnect"}
-                  </button>
+                {isSignedIn ? (
+                  <span className="text-[12px] text-zinc-500">Signed In</span>
                 ) : (
                   <button
                     onClick={() => void onConnect(provider.id)}
                     disabled={isAnyAccountActionPending}
                     className="text-[12px] text-zinc-300 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isPendingProvider === "connect" ? "Connecting..." : "Connect"}
+                    {isPendingProvider ? "Signing in..." : "Sign In"}
                   </button>
                 )}
               </div>
@@ -1116,10 +1104,7 @@ export function SettingsView() {
   const [draft, setDraft] = useState<McpServerDraft>(emptyDraft("global"));
   const [configText, setConfigText] = useState<string>(() => draftToSnippet(emptyDraft("global")));
   const [pendingAccountAction, setPendingAccountAction] = useState<"signOut" | null>(null);
-  const [pendingProviderAction, setPendingProviderAction] = useState<{
-    provider: OAuthProvider;
-    action: "connect" | "disconnect";
-  } | null>(null);
+  const [pendingOAuthProvider, setPendingOAuthProvider] = useState<OAuthProvider | null>(null);
 
   const llmConfigs = useConfigStore((state) => state.llmConfigs);
   const currentProvider = useConfigStore((state) => state.currentProvider);
@@ -1246,7 +1231,9 @@ export function SettingsView() {
       }
 
       if (result.success) {
-        addToast({ type: "success", message: "账号已连接，当前会话已同步。" });
+        const providerLabel =
+          ACCOUNT_PROVIDERS.find((item) => item.id === provider)?.label || "账号";
+        addToast({ type: "success", message: `${providerLabel} 登录成功，当前会话已同步。` });
       } else if (result.error) {
         addToast({ type: "error", message: result.error });
       }
@@ -1415,16 +1402,8 @@ export function SettingsView() {
   };
 
   const handleConnectAccount = async (provider: OAuthProvider) => {
-    if (provider !== "github") {
-      addToast({
-        type: "info",
-        message: `${provider} 登录入口已保留，但这次只接通 GitHub。`,
-      });
-      return;
-    }
-
     try {
-      setPendingProviderAction({ provider, action: "connect" });
+      setPendingOAuthProvider(provider);
       const redirectTo = isTauriEnvironment()
         ? `slate://auth/callback?provider=${provider}`
         : `${window.location.origin}/settings?tab=account&provider=${provider}`;
@@ -1436,33 +1415,13 @@ export function SettingsView() {
         window.location.assign(authorizationUrl);
       }
     } catch (error) {
+      const providerLabel = ACCOUNT_PROVIDERS.find((item) => item.id === provider)?.label || provider;
       addToast({
         type: "error",
-        message: error instanceof Error ? error.message : `连接 ${provider} 失败`,
+        message: error instanceof Error ? error.message : `${providerLabel} 登录失败`,
       });
     } finally {
-      setPendingProviderAction(null);
-    }
-  };
-
-  const handleDisconnectAccount = async (provider: OAuthProvider) => {
-    if (currentOAuthProvider !== provider) {
-      addToast({
-        type: "info",
-        message: `${provider} 的解绑接口还没有接入，当前只支持断开当前登录会话。`,
-      });
-      return;
-    }
-
-    try {
-      setPendingProviderAction({ provider, action: "disconnect" });
-      await signOut();
-      addToast({
-        type: "success",
-        message: `已断开 ${provider} 当前会话。`,
-      });
-    } finally {
-      setPendingProviderAction(null);
+      setPendingOAuthProvider(null);
     }
   };
 
@@ -1528,10 +1487,9 @@ export function SettingsView() {
             user={authUser}
             currentOAuthProvider={currentOAuthProvider}
             pendingAction={pendingAccountAction}
-            pendingProviderAction={pendingProviderAction}
+            pendingOAuthProvider={pendingOAuthProvider}
             backendBaseUrl={getBackendBaseUrl()}
             onConnect={handleConnectAccount}
-            onDisconnect={handleDisconnectAccount}
             onSignOut={handleSignOut}
             onDeleteAccount={handleDeleteAccount}
           />

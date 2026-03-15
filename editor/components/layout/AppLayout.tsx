@@ -22,6 +22,19 @@ import { parseOAuthDeepLinkUrl } from "@/services/backend/auth";
 import { getCurrentDeepLinks, onDeepLinkOpen } from "@/services/tauri/deepLink";
 import { useAuthStore, useProjectStore, useEditorStore, useUIStore } from "@/stores";
 
+function getOAuthProviderLabel(provider: string | null | undefined): string {
+  switch (provider) {
+    case "github":
+      return "GitHub";
+    case "gitee":
+      return "Gitee";
+    case "google":
+      return "Google";
+    default:
+      return "账号";
+  }
+}
+
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -95,7 +108,10 @@ export function AppLayout() {
         }
 
         if (result.success) {
-          addToast({ type: "success", message: "GitHub 账号已连接。" });
+          addToast({
+            type: "success",
+            message: `${getOAuthProviderLabel(payload.provider)} 登录成功。`,
+          });
         } else if (
           result.error &&
           !(hasAuthSession && result.error.includes("OAuth 交换票据无效或已过期"))
