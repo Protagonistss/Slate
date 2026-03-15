@@ -14,11 +14,12 @@ import {
 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { AIModelsSettings } from "@/components/settings/AIModelsSettings";
 import { LLM_PROVIDERS as PROVIDERS } from "@/constants/llmProviders";
 import { cn } from "@/lib/utils";
 import { openUrl } from "@/services/tauri/shell";
 import { isTauriEnvironment } from "@/services/tauri/deepLink";
-import { useAuthStore, useConfigStore, useMcpStore, useProjectStore, useUIStore } from "@/stores";
+import { useAuthStore, useMcpStore, useProjectStore, useUIStore } from "@/stores";
 import type { ApiKeyStorage } from "@/stores/configStore";
 import { getBackendBaseUrl, type AuthUser, type OAuthProvider } from "@/services/backend/auth";
 import type { LLMConfig, LLMProvider } from "@/services/llm/types";
@@ -69,6 +70,7 @@ interface ModelsSettingsProps {
 }
 
 interface MCPSettingsProps {
+  mcpSupported: boolean;
   currentProject: { name: string; path: string } | null;
   servers: McpServerStatus[];
   tools: McpToolDescriptor[];
@@ -916,6 +918,7 @@ function ModelsSettings({
 }
 
 function MCPSettings({
+  mcpSupported,
   currentProject,
   servers,
   tools,
@@ -962,6 +965,10 @@ function MCPSettings({
   };
 
   const renderServerActions = (server: McpServerStatus) => {
+    if (!mcpSupported) {
+      return null;
+    }
+
     if (server.status === "connected") {
       return (
         <div className="absolute right-4 flex items-center gap-1 bg-[#050505] pl-2 opacity-0 shadow-[0_0_12px_8px_#050505] transition-opacity group-hover:opacity-100">
@@ -1063,9 +1070,12 @@ function MCPSettings({
               openNewForm();
             }
           }}
+          disabled={!mcpSupported}
           className={cn(
             "group flex items-center gap-2 rounded-lg border px-3.5 py-2 text-[13px] font-medium shadow-sm transition-all duration-200 active:scale-95",
-            formOpen
+            !mcpSupported
+              ? "cursor-not-allowed border-white/5 bg-white/[0.03] text-zinc-600"
+              : formOpen
               ? "border-white/20 bg-white/10 text-white"
               : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
           )}
@@ -1079,8 +1089,14 @@ function MCPSettings({
         </button>
       </div>
 
+      {!mcpSupported && (
+        <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-4 text-[13px] leading-relaxed text-amber-100/80">
+          MCP Servers 仅支持桌面端。当前 Web 环境下只能查看占位状态，新增、编辑、启停、重连和删除都已禁用。
+        </div>
+      )}
+
       <AnimatePresence initial={false}>
-        {formOpen && (
+        {mcpSupported && formOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0, overflow: "hidden" }}
             animate={{ opacity: 1, height: "auto", overflow: "hidden" }}
@@ -1160,6 +1176,7 @@ function MCPSettings({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search connected servers..."
+            disabled={!mcpSupported && servers.length === 0}
             className="w-full rounded-xl border border-white/5 bg-black/20 py-3.5 pl-11 pr-4 text-[13px] text-zinc-200 shadow-sm transition-all placeholder:text-zinc-600 focus:border-zinc-500 focus:bg-black/40 focus:outline-none focus:ring-1 focus:ring-zinc-500/20"
           />
         </div>
@@ -1167,7 +1184,9 @@ function MCPSettings({
         <div className="space-y-1">
           {filteredServers.length === 0 ? (
             <div className="rounded-xl border border-dashed border-zinc-800 bg-white/[0.01] p-5 text-[13px] text-zinc-500">
-              {servers.length === 0
+              {!mcpSupported
+                ? "当前环境不支持 MCP 桌面运行时。请在 Slate 桌面端管理本地 stdio servers。"
+                : servers.length === 0
                 ? "No servers configured yet. Add a local stdio server to get started."
                 : "No servers matched your search."}
             </div>
@@ -1244,6 +1263,7 @@ function MCPSettings({
 export function SettingsView() {
   const location = useLocation();
   const navigate = useNavigate();
+  const mcpSupported = isTauriEnvironment();
   const [activeTab, setActiveTab] = useState<SettingsTab>("models");
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<McpServerDraft>(emptyDraft("global"));
@@ -1251,12 +1271,6 @@ export function SettingsView() {
   const [pendingAccountAction, setPendingAccountAction] = useState<"signOut" | null>(null);
   const [pendingOAuthProvider, setPendingOAuthProvider] = useState<OAuthProvider | null>(null);
 
-  const llmConfigs = useConfigStore((state) => state.llmConfigs);
-  const currentProvider = useConfigStore((state) => state.currentProvider);
-  const setCurrentProvider = useConfigStore((state) => state.setCurrentProvider);
-  const setLLMConfig = useConfigStore((state) => state.setLLMConfig);
-  const apiKeys = useConfigStore((state) => state.apiKeys);
-  const setApiKey = useConfigStore((state) => state.setApiKey);
   const currentProject = useProjectStore((state) => state.currentProject);
   const addToast = useUIStore((state) => state.addToast);
   const servers = useMcpStore((state) => state.servers);
@@ -1281,10 +1295,16 @@ export function SettingsView() {
   const authUserId = authUser?.id ?? null;
 
   useEffect(() => {
-    if (!initialized) {
+    if (mcpSupported && !initialized) {
       void initialize();
     }
-  }, [initialize, initialized]);
+  }, [initialize, initialized, mcpSupported]);
+
+  useEffect(() => {
+    if (!mcpSupported && formOpen) {
+      setFormOpen(false);
+    }
+  }, [formOpen, mcpSupported]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1327,33 +1347,6 @@ export function SettingsView() {
       // 错误交给 authStore 的 error/toast 链路处理。
     });
   }, [activeTab, authUserId, refreshProfile]);
-
-  const normalizedConfigs = useMemo(
-    () =>
-      PROVIDERS.reduce<Record<LLMProvider, LLMConfig>>((configs, provider) => {
-        const fallback = defaultLLMConfigFor(provider.id);
-        const current = llmConfigs?.[provider.id];
-        configs[provider.id] = {
-          ...fallback,
-          ...current,
-          provider: provider.id,
-          model: current?.model || fallback.model,
-        };
-        return configs;
-      }, {} as Record<LLMProvider, LLMConfig>),
-    [llmConfigs]
-  );
-  const safeProvider = PROVIDERS.some((provider) => provider.id === currentProvider)
-    ? currentProvider
-    : "anthropic";
-  const safeApiKeys = apiKeys || {};
-  const currentConfig = normalizedConfigs[safeProvider];
-
-  useEffect(() => {
-    if (safeProvider !== currentProvider) {
-      setCurrentProvider(safeProvider);
-    }
-  }, [currentProvider, safeProvider, setCurrentProvider]);
 
   useEffect(() => {
     if (!location.hash.includes("access_token") && !location.hash.includes("error=")) {
@@ -1407,6 +1400,10 @@ export function SettingsView() {
   );
 
   const openNewForm = () => {
+    if (!mcpSupported) {
+      return;
+    }
+
     const nextDraft = emptyDraft(currentProject ? "project" : "global");
     setDraft(nextDraft);
     setConfigText(draftToSnippet(nextDraft));
@@ -1593,20 +1590,11 @@ export function SettingsView() {
   const renderContent = () => {
     switch (activeTab) {
       case "models":
-        return (
-          <ModelsSettings
-            currentProvider={safeProvider}
-            currentConfig={currentConfig}
-            llmConfigs={normalizedConfigs}
-            apiKeys={safeApiKeys}
-            setCurrentProvider={setCurrentProvider}
-            setLLMConfig={setLLMConfig}
-            setApiKey={setApiKey}
-          />
-        );
+        return <AIModelsSettings />;
       case "mcp":
         return (
           <MCPSettings
+            mcpSupported={mcpSupported}
             currentProject={currentProject ? { name: currentProject.name, path: currentProject.path } : null}
             servers={servers}
             tools={tools}

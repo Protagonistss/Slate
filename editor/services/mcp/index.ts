@@ -15,6 +15,14 @@ const isTauri =
   typeof window !== 'undefined' &&
   ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
+const MCP_DESKTOP_ONLY_ERROR = 'MCP Servers 仅支持桌面端';
+
+function requireTauriEnvironment(): void {
+  if (!isTauri) {
+    throw new Error(MCP_DESKTOP_ONLY_ERROR);
+  }
+}
+
 export async function listMcpServers(): Promise<McpServerStatus[]> {
   if (!isTauri) return [];
   return invoke('list_mcp_servers');
@@ -23,24 +31,28 @@ export async function listMcpServers(): Promise<McpServerStatus[]> {
 export async function upsertMcpServer(
   request: UpsertMcpServerInput
 ): Promise<McpServerMutationResponse> {
+  requireTauriEnvironment();
   return invoke('upsert_mcp_server', { request });
 }
 
 export async function removeMcpServer(
   request: RemoveMcpServerInput
 ): Promise<McpServerMutationResponse> {
+  requireTauriEnvironment();
   return invoke('remove_mcp_server', { request });
 }
 
 export async function setMcpServerEnabled(
   request: SetMcpServerEnabledInput
 ): Promise<McpServerMutationResponse> {
+  requireTauriEnvironment();
   return invoke('set_mcp_server_enabled', { request });
 }
 
 export async function retryMcpServer(
   request: RetryMcpServerInput
 ): Promise<McpServerMutationResponse> {
+  requireTauriEnvironment();
   return invoke('retry_mcp_server', { request });
 }
 
@@ -54,6 +66,7 @@ export async function callMcpTool(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<McpCallToolResult> {
+  requireTauriEnvironment();
   return invoke('call_mcp_tool', {
     request: {
       serverId,

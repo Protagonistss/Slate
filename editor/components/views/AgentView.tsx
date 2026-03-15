@@ -21,7 +21,15 @@ import {
 import { cn } from "@/lib/utils";
 import { AgentModelSelect, ChatPanel, ToolCallDisplay } from "@/components/agent";
 import { useAgent } from "@/hooks";
-import { useConversationStore, useEditorStore, useMcpStore, useProjectStore, useUIStore } from "@/stores";
+import {
+  useAuthStore,
+  useConversationStore,
+  useEditorStore,
+  useLLMCatalogStore,
+  useMcpStore,
+  useProjectStore,
+  useUIStore,
+} from "@/stores";
 import { useConfigStore } from "@/stores/configStore";
 import type { Message } from "@/services/llm/types";
 
@@ -151,8 +159,15 @@ export function AgentView() {
   const { currentProject } = useProjectStore();
   const { servers, tools } = useMcpStore();
   const addToast = useUIStore((state) => state.addToast);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const currentProvider = useConfigStore((state) => state.currentProvider);
-  const apiKeys = useConfigStore((state) => state.apiKeys);
+  const llmConfigs = useConfigStore((state) => state.llmConfigs);
+  const syncLLMProviders = useConfigStore((state) => state.syncLLMProviders);
+  const catalogProviders = useLLMCatalogStore((state) => state.providers);
+  const catalogLoading = useLLMCatalogStore((state) => state.isLoading);
+  const catalogError = useLLMCatalogStore((state) => state.error);
+  const initializeCatalog = useLLMCatalogStore((state) => state.initialize);
+  const clearCatalog = useLLMCatalogStore((state) => state.clear);
   const { status, isProcessing, currentToolCalls, sendMessage, stopGeneration, reset, error, clearError } =
     useAgent();
   const activeFile = useEditorStore((state) =>
@@ -181,7 +196,18 @@ export function AgentView() {
   );
   const [goalDraft, setGoalDraft] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
-  const providerReady = currentProvider === "ollama" || Boolean(apiKeys[currentProvider]);
+  const configuredProviders = useMemo(
+    () => catalogProviders.filter((provider) => provider.configured && provider.models.length > 0),
+    [catalogProviders]
+  );
+  const currentLLMConfig = currentProvider ? llmConfigs[currentProvider] : null;
+  const providerReady =
+    Boolean(accessToken) &&
+    Boolean(currentProvider) &&
+    Boolean(currentLLMConfig?.model) &&
+    configuredProviders.some(
+      (provider) => provider.name === currentProvider && provider.models.includes(currentLLMConfig.model)
+    );
 
   useEffect(() => {
     const text = extractTextContent(latestUserMessage);
@@ -189,6 +215,20 @@ export function AgentView() {
       setGoalDraft(text);
     }
   }, [latestUserMessage]);
+
+  useEffect(() => {
+    if (accessToken) {
+      void initializeCatalog();
+    } else {
+      clearCatalog();
+    }
+  }, [accessToken, clearCatalog, initializeCatalog]);
+
+  useEffect(() => {
+    if (catalogProviders.length > 0) {
+      syncLLMProviders(catalogProviders);
+    }
+  }, [catalogProviders, syncLLMProviders]);
 
   const hasSession = visibleMessages.length > 0;
   const connectedServers = servers.filter((server) => server.status === "connected").length;
@@ -265,17 +305,49 @@ export function AgentView() {
     },
   ];
 
+  const ensureAgentReady = () => {
+    if (!accessToken) {
+      addToast({
+        type: "error",
+        message: "请先登录 backend 账号",
+      });
+      return false;
+    }
+
+    if (catalogLoading && configuredProviders.length === 0) {
+      addToast({
+        type: "info",
+        message: "模型目录加载中，请稍后再试。",
+      });
+      return false;
+    }
+
+    if (catalogError && configuredProviders.length === 0) {
+      addToast({
+        type: "error",
+        message: catalogError,
+      });
+      return false;
+    }
+
+    if (!providerReady) {
+      addToast({
+        type: "error",
+        message: "当前没有可用模型，请先在 Settings > AI Models 选择可用模型。",
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   const handleStart = async (goal: string) => {
     const nextGoal = goal.trim();
     if (!nextGoal) {
       return;
     }
 
-    if (!providerReady) {
-      addToast({
-        type: "error",
-        message: `当前 ${currentProvider} 未配置 API Key，请先到 Settings > AI Models 配置。`,
-      });
+    if (!ensureAgentReady()) {
       return;
     }
 
@@ -286,11 +358,7 @@ export function AgentView() {
 
   const handleRunGoal = async () => {
     if (!goalDraft.trim() || isProcessing) return;
-    if (!providerReady) {
-      addToast({
-        type: "error",
-        message: `当前 ${currentProvider} 未配置 API Key，请先到 Settings > AI Models 配置。`,
-      });
+    if (!ensureAgentReady()) {
       return;
     }
     await sendMessage(goalDraft.trim());
@@ -302,11 +370,7 @@ export function AgentView() {
       return;
     }
 
-    if (!providerReady) {
-      addToast({
-        type: "error",
-        message: `当前 ${currentProvider} 未配置 API Key，请先到 Settings > AI Models 配置。`,
-      });
+    if (!ensureAgentReady()) {
       return;
     }
 

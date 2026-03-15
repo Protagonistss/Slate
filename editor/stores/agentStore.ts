@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import { LLMFactory } from '../services/llm';
 import { toolRegistry } from '../services/tools';
+import { streamBackendLLMChat } from '@/services/backend/llm';
 import type {
   ContentBlock,
+  LLMConfig,
   Message,
   StreamChunk,
   ToolDefinition,
@@ -10,6 +11,7 @@ import type {
   ToolUseContentBlock,
 } from '../services/llm/types';
 import type { ToolContext, ToolResult } from '../services/tools';
+import { useAuthStore } from './authStore';
 import { useConfigStore } from './configStore';
 import { useConversationStore } from './conversationStore';
 
@@ -28,6 +30,8 @@ interface MessageContext {
   conversationId: string;
   tools: ToolDefinition[];
   toolContext: ToolContext;
+  llmConfig: LLMConfig;
+  accessToken: string;
   systemPrompt?: string;
 }
 
@@ -146,6 +150,12 @@ function createAssistantMessage(
 function prepareMessageContext(content: string): MessageContext | null {
   const conversationStore = useConversationStore.getState();
   const configStore = useConfigStore.getState();
+  const authStore = useAuthStore.getState();
+
+  const accessToken = authStore.accessToken;
+  if (!accessToken) {
+    return null;
+  }
 
   let conversationId = conversationStore.currentConversationId;
   if (!conversationId) {
@@ -158,12 +168,14 @@ function prepareMessageContext(content: string): MessageContext | null {
   });
 
   const llmConfig = configStore.getCurrentLLMConfig();
-  if (!llmConfig.apiKey && llmConfig.provider !== 'ollama') {
+  if (!llmConfig.provider || !llmConfig.model) {
     return null;
   }
 
   return {
     conversationId,
+    accessToken,
+    llmConfig,
     tools: toolRegistry.getAllDefinitions(),
     toolContext: {
       workingDirectory: configStore.workingDirectory,
@@ -255,13 +267,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   abortController: null,
 
   sendMessage: async (content: string) => {
-    const configStore = useConfigStore.getState();
-    const llmConfig = configStore.getCurrentLLMConfig();
+    const accessToken = useAuthStore.getState().accessToken;
 
-    if (!llmConfig.apiKey && llmConfig.provider !== 'ollama') {
+    if (!accessToken) {
       set({
         status: 'error',
-        error: '请先配置 API Key',
+        error: '请先登录 backend 账号',
         isProcessing: false,
       });
       return;
@@ -271,13 +282,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     if (!context) {
       set({
         status: 'error',
-        error: '无法准备消息上下文',
+        error: '无法准备模型调用上下文',
         isProcessing: false,
       });
       return;
     }
 
-    const adapter = LLMFactory.createAdapter(llmConfig);
     const abortController = new AbortController();
 
     set({
@@ -303,9 +313,17 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         };
         let streamFailed = false;
 
-        for await (const chunk of adapter.sendMessage(
-          messages,
-          context.tools,
+        for await (const chunk of streamBackendLLMChat(
+          context.accessToken,
+          {
+            conversation_id: context.conversationId,
+            provider: context.llmConfig.provider,
+            model: context.llmConfig.model,
+            messages,
+            tools: context.tools,
+            temperature: context.llmConfig.temperature,
+            max_tokens: context.llmConfig.maxTokens,
+          },
           abortController.signal
         )) {
           if (abortController.signal.aborted) {

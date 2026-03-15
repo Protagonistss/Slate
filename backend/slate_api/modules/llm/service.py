@@ -10,12 +10,19 @@ from sqlalchemy.orm import Session
 from slate_api.core.config import settings
 from slate_api.core.schemas import ChatMessage
 from slate_api.infra.database import utcnow
-from slate_api.infra.llm.providers import LLMGatewayError, list_provider_specs, resolve_provider
+from slate_api.infra.llm.providers import (
+    LLMGatewayError,
+    delete_custom_provider,
+    list_provider_specs_for_user,
+    resolve_provider,
+    resolve_provider_for_user,
+    upsert_custom_provider,
+)
 from slate_api.infra.models import LLMUsageLog, User
 from slate_api.modules.llm.schemas import LLMChatRequest, LLMModelRead, LLMProviderRead
 
 
-def get_provider_catalog() -> list[LLMProviderRead]:
+def get_provider_catalog(db: Session, user: User) -> list[LLMProviderRead]:
     return [
         LLMProviderRead(
             name=spec.name,
@@ -24,17 +31,59 @@ def get_provider_catalog() -> list[LLMProviderRead]:
             base_url=spec.base_url or None,
             models=list(spec.models),
             default_model=spec.default_model,
+            source=spec.source,  # type: ignore[arg-type]
+            protocol=spec.protocol,  # type: ignore[arg-type]
+            editable=spec.editable,
+            deletable=spec.deletable,
         )
-        for spec in list_provider_specs()
+        for spec in list_provider_specs_for_user(db, user)
     ]
 
 
-def get_model_catalog() -> list[LLMModelRead]:
+def get_model_catalog(db: Session, user: User) -> list[LLMModelRead]:
     items: list[LLMModelRead] = []
-    for spec in list_provider_specs():
+    for spec in list_provider_specs_for_user(db, user):
         for model in spec.models:
             items.append(LLMModelRead(provider=spec.name, model=model, configured=spec.configured))
     return items
+
+
+def save_custom_provider(
+    db: Session,
+    user: User,
+    display_name: str,
+    base_url: str,
+    api_key: str | None,
+    models: list[str],
+    default_model: str | None = None,
+    existing_provider_name: str | None = None,
+) -> LLMProviderRead:
+    provider = upsert_custom_provider(
+        db=db,
+        user=user,
+        display_name=display_name,
+        base_url=base_url,
+        api_key=api_key,
+        models=models,
+        default_model=default_model,
+        existing_provider_name=existing_provider_name,
+    )
+    return LLMProviderRead(
+        name=provider.name,
+        display_name=provider.display_name,
+        configured=True,
+        base_url=provider.base_url,
+        models=list(provider.models or []),
+        default_model=provider.default_model,
+        source="custom",
+        protocol="openai",
+        editable=True,
+        deletable=True,
+    )
+
+
+def remove_custom_provider(db: Session, user: User, provider_name: str) -> None:
+    delete_custom_provider(db, user, provider_name)
 
 
 def format_messages_for_openai(messages: list[ChatMessage]) -> list[dict[str, Any]]:
@@ -154,7 +203,7 @@ async def stream_chat_completion(
     user: User,
     request: LLMChatRequest,
 ) -> AsyncIterator[str]:
-    provider, model = resolve_provider(request.provider, request.model)
+    provider, model = resolve_provider_for_user(db, user, request.provider, request.model)
     usage_log = LLMUsageLog(
         request_id=secrets.token_urlsafe(16),
         user_id=user.id,

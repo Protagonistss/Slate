@@ -15,6 +15,10 @@ class LLMProviderRead(BaseModel):
     base_url: str | None = None
     models: list[str]
     default_model: str | None = None
+    source: Literal["builtin", "custom"] = "builtin"
+    protocol: Literal["openai"] = "openai"
+    editable: bool = False
+    deletable: bool = False
 
 
 class LLMModelRead(BaseModel):
@@ -32,6 +36,14 @@ class LLMChatRequest(BaseModel):
     tools: list[ToolDefinition] = Field(default_factory=list)
     temperature: float | None = None
     max_tokens: int | None = None
+
+
+class LLMProviderUpsertRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=128)
+    base_url: str = Field(min_length=1, max_length=1024)
+    api_key: str | None = Field(default=None)
+    models: list[str] = Field(default_factory=list)
+    default_model: str | None = Field(default=None, max_length=128)
 
 
 class LLMStreamEvent(BaseModel):

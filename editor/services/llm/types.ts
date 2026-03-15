@@ -1,5 +1,5 @@
 // LLM Provider 类型
-export type LLMProvider = 'openai' | 'anthropic' | 'ollama';
+export type LLMProvider = string;
 
 // 消息角色
 export type MessageRole = 'system' | 'user' | 'assistant';

@@ -25,3 +25,4 @@ export type { ProjectState, ProjectInfo, ProjectFile } from './projectStore';
 export { useMcpStore } from './mcpStore';
 
 export { useAuthStore } from './authStore';
+export { useLLMCatalogStore } from './llmCatalogStore';

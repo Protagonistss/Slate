@@ -25,6 +25,7 @@ class User(Base):
     identities: Mapped[list["AuthIdentity"]] = relationship(back_populates="user")
     refresh_sessions: Mapped[list["RefreshSession"]] = relationship(back_populates="user")
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="user")
+    llm_provider_configs: Mapped[list["LLMProviderConfig"]] = relationship(back_populates="user")
 
 
 class AuthIdentity(Base):
@@ -103,3 +104,22 @@ class LLMUsageLog(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LLMProviderConfig(Base):
+    __tablename__ = "llm_provider_configs"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_llm_provider_user_name"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    display_name: Mapped[str] = mapped_column(String(128))
+    protocol: Mapped[str] = mapped_column(String(32), default="openai")
+    base_url: Mapped[str] = mapped_column(String(1024))
+    api_key: Mapped[str] = mapped_column(Text)
+    models: Mapped[list[str]] = mapped_column(JSON, default=list)
+    default_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    user: Mapped[User] = relationship(back_populates="llm_provider_configs")

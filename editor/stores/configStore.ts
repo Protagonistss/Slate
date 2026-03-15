@@ -1,13 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { BackendLLMProvider } from '@/services/backend/llm';
 import type { LLMConfig, LLMProvider } from '../services/llm/types';
 
-// API Key 存储（单独存储以支持加密）
-export interface ApiKeyStorage {
-  openai?: string;
-  anthropic?: string;
-  ollama?: string; // 本地模型可能不需要
-}
+export type ApiKeyStorage = Record<string, string | undefined>;
 
 // 配置状态
 export interface ConfigState {
@@ -28,6 +24,7 @@ export interface ConfigState {
 
   // Actions
   setLLMConfig: (provider: LLMProvider, config: Partial<LLMConfig>) => void;
+  syncLLMProviders: (providers: BackendLLMProvider[]) => void;
   setCurrentProvider: (provider: LLMProvider) => void;
   setApiKey: (provider: LLMProvider, key: string | undefined) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -38,33 +35,10 @@ export interface ConfigState {
   resetConfig: () => void;
 }
 
-// 默认 LLM 配置
-const defaultLLMConfigs: Record<LLMProvider, LLMConfig> = {
-  openai: {
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    maxTokens: 4096,
-    temperature: 0.7,
-  },
-  anthropic: {
-    provider: 'anthropic',
-    model: 'claude-sonnet-4-6-20250514',
-    maxTokens: 4096,
-    temperature: 0.7,
-  },
-  ollama: {
-    provider: 'ollama',
-    model: 'llama3.2',
-    baseUrl: 'http://localhost:11434',
-    maxTokens: 4096,
-    temperature: 0.7,
-  },
-};
-
 // 默认状态
 const defaultState = {
-  llmConfigs: defaultLLMConfigs,
-  currentProvider: 'anthropic' as LLMProvider,
+  llmConfigs: {} as Record<LLMProvider, LLMConfig>,
+  currentProvider: '' as LLMProvider,
   apiKeys: {},
   theme: 'dark' as const,
   language: 'zh-CN',
@@ -81,9 +55,53 @@ export const useConfigStore = create<ConfigState>()(
         set((state) => ({
           llmConfigs: {
             ...state.llmConfigs,
-            [provider]: { ...state.llmConfigs[provider], ...config },
+            [provider]: {
+              provider,
+              model: '',
+              maxTokens: 4096,
+              temperature: 0.7,
+              ...state.llmConfigs[provider],
+              ...config,
+            },
           },
         })),
+
+      syncLLMProviders: (providers) =>
+        set((state) => {
+          const configuredProviders = providers.filter(
+            (provider) => provider.configured && provider.models.length > 0
+          );
+
+          const nextConfigs = { ...state.llmConfigs };
+
+          configuredProviders.forEach((provider) => {
+            const existingConfig = nextConfigs[provider.name];
+            const fallbackModel = provider.default_model || provider.models[0] || '';
+            const nextModel =
+              existingConfig?.model && provider.models.includes(existingConfig.model)
+                ? existingConfig.model
+                : fallbackModel;
+
+            nextConfigs[provider.name] = {
+              provider: provider.name,
+              model: nextModel,
+              maxTokens: existingConfig?.maxTokens ?? 4096,
+              temperature: existingConfig?.temperature ?? 0.7,
+              systemPrompt: existingConfig?.systemPrompt,
+            };
+          });
+
+          const nextCurrentProvider =
+            state.currentProvider &&
+            configuredProviders.some((provider) => provider.name === state.currentProvider)
+              ? state.currentProvider
+              : configuredProviders[0]?.name || '';
+
+          return {
+            llmConfigs: nextConfigs,
+            currentProvider: nextCurrentProvider,
+          };
+        }),
 
       setCurrentProvider: (provider) => set({ currentProvider: provider }),
 
@@ -107,6 +125,10 @@ export const useConfigStore = create<ConfigState>()(
         const apiKey = state.apiKeys[provider];
 
         return {
+          provider,
+          model: '',
+          maxTokens: 4096,
+          temperature: 0.7,
           ...config,
           apiKey,
         };
