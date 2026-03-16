@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
 import { TopBar } from "./TopBar";
 import { ProjectFileTree } from "./ProjectFileTree";
 import {
@@ -14,13 +14,15 @@ import {
   Home,
   ChevronRight,
   ChevronDown,
-  Settings
+  PenSquare,
+  Settings,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SimpleLogo } from "../shared";
 import { parseOAuthDeepLinkUrl } from "@/services/backend/auth";
 import { getCurrentDeepLinks, onDeepLinkOpen } from "@/services/tauri/deepLink";
-import { useAuthStore, useProjectStore, useEditorStore, useUIStore } from "@/stores";
+import { useAgentStore, useAuthStore, useConversationStore, useProjectStore, useEditorStore, useUIStore } from "@/stores";
 
 function getOAuthProviderLabel(provider: string | null | undefined): string {
   switch (provider) {
@@ -42,9 +44,17 @@ export function AppLayout() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const { openProject, closeProject } = useProjectStore();
   const { closeAllFiles } = useEditorStore();
+  const conversations = useConversationStore((state) => state.conversations);
+  const currentConversationId = useConversationStore((state) => state.currentConversationId);
+  const createConversation = useConversationStore((state) => state.createConversation);
+  const setCurrentConversation = useConversationStore((state) => state.setCurrentConversation);
+  const renameConversation = useConversationStore((state) => state.renameConversation);
+  const deleteConversation = useConversationStore((state) => state.deleteConversation);
   const completeOAuthExchange = useAuthStore((state) => state.completeOAuthExchange);
   const lastHandledOAuthTicket = useAuthStore((state) => state.lastHandledOAuthTicket);
   const hasAuthSession = useAuthStore((state) => Boolean(state.accessToken || state.refreshToken));
+  const isAgentProcessing = useAgentStore((state) => state.isProcessing);
+  const resetAgentState = useAgentStore((state) => state.reset);
   const addToast = useUIStore((state) => state.addToast);
   const processedDeepLinksRef = useRef<Set<string>>(new Set());
 
@@ -70,6 +80,49 @@ export function AppLayout() {
     if (currentProject) {
       navigate("/editor");
     }
+  };
+
+  const handleCreateAgentSession = () => {
+    if (isAgentProcessing) {
+      return;
+    }
+
+    const conversationId = createConversation();
+    resetAgentState();
+    navigate("/agent");
+    setCurrentConversation(conversationId);
+  };
+
+  const handleSelectAgentSession = (conversationId: string) => {
+    if (isAgentProcessing) {
+      return;
+    }
+
+    resetAgentState();
+    setCurrentConversation(conversationId);
+    if (!location.pathname.includes("agent")) {
+      navigate("/agent");
+    }
+  };
+
+  const handleDeleteAgentSession = (conversationId: string, event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (isAgentProcessing) {
+      return;
+    }
+
+    deleteConversation(conversationId);
+    if (conversationId === currentConversationId) {
+      resetAgentState();
+    }
+  };
+
+  const handleRenameAgentSession = (conversationId: string, title: string) => {
+    if (isAgentProcessing) {
+      return;
+    }
+
+    renameConversation(conversationId, title);
   };
 
   useEffect(() => {
@@ -200,12 +253,46 @@ export function AppLayout() {
                     )}
 
                     {currentMode === "agent" && (
-                      <section className="flex-1 -mt-4">
-                        <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-3">Recent Sessions</h3>
-                        <div className="space-y-1">
-                          <SessionItem title="Auth Flow Overhaul" date="Today, 2:30 PM" />
-                          <SessionItem title="Deployment Script" date="Yesterday" />
-                          <SessionItem title="Slate UI System" date="Last week" />
+                      <section className="flex-1 -mt-4 min-h-0">
+                        <div className="flex items-center justify-between px-2 mb-3">
+                          <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Recent Sessions</h3>
+                          <button
+                            onClick={handleCreateAgentSession}
+                            disabled={isAgentProcessing}
+                            className={cn(
+                              "flex h-6 w-6 items-center justify-center rounded-md transition-colors",
+                              isAgentProcessing
+                                ? "cursor-not-allowed text-zinc-700"
+                                : "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                            )}
+                            title={isAgentProcessing ? "运行中无法创建新会话" : "New Task"}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M5 12h14" />
+                              <path d="M12 5v14" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <div className="space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
+                          {conversations.length > 0 ? (
+                            conversations.map((conversation) => (
+                              <SessionItem
+                                key={conversation.id}
+                                title={conversation.title}
+                                date={formatConversationDate(conversation.updatedAt)}
+                                isActive={conversation.id === currentConversationId}
+                                disabled={isAgentProcessing}
+                                onClick={() => handleSelectAgentSession(conversation.id)}
+                                onDelete={(event) => handleDeleteAgentSession(conversation.id, event)}
+                                onRename={(title) => handleRenameAgentSession(conversation.id, title)}
+                              />
+                            ))
+                          ) : (
+                            <div className="px-3 py-5 text-center text-xs text-zinc-600">
+                              还没有 agent 会话
+                            </div>
+                          )}
                         </div>
                       </section>
                     )}
@@ -335,11 +422,190 @@ function NavItem({ icon: Icon, label, active = false, onClick }: NavItemProps) {
   );
 }
 
-function SessionItem({ title, date }: { title: string; date: string }) {
+function formatConversationDate(timestamp: number): string {
+  const delta = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (delta < minute) {
+    return "Just now";
+  }
+
+  if (delta < hour) {
+    return `${Math.max(1, Math.floor(delta / minute))}m ago`;
+  }
+
+  if (delta < day) {
+    return `${Math.floor(delta / hour)}h ago`;
+  }
+
+  if (delta < day * 7) {
+    return `${Math.floor(delta / day)}d ago`;
+  }
+
+  return new Date(timestamp).toLocaleDateString("zh-CN", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function SessionItem({
+  title,
+  date,
+  isActive = false,
+  disabled = false,
+  onClick,
+  onDelete,
+  onRename,
+}: {
+  title: string;
+  date: string;
+  isActive?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  onDelete: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onRename: (title: string) => void;
+}) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(title);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setDraftTitle(title);
+  }, [title]);
+
+  useEffect(() => {
+    if (isRenaming) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isRenaming]);
+
+  const commitRename = () => {
+    setIsRenaming(false);
+    const nextTitle = draftTitle.trim();
+    if (nextTitle && nextTitle !== title) {
+      onRename(nextTitle);
+    } else {
+      setDraftTitle(title);
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-1 px-3 py-2 rounded-lg cursor-pointer transition-all hover:bg-zinc-800/40 group">
-      <span className="text-sm font-medium text-zinc-400 group-hover:text-zinc-200 truncate">{title}</span>
-      <span className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest">{date}</span>
+    <div
+      onClick={() => !disabled && !isRenaming && onClick()}
+      onMouseLeave={() => setIsConfirmingDelete(false)}
+      className={cn(
+        "group relative flex flex-col gap-1 rounded-lg border px-3 py-2 transition-all",
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+        isActive ? "border-zinc-700 bg-zinc-800/80" : "border-transparent hover:bg-zinc-800/40"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        {isRenaming ? (
+          <input
+            ref={inputRef}
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            onBlur={commitRename}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                commitRename();
+              }
+
+              if (event.key === "Escape") {
+                setDraftTitle(title);
+                setIsRenaming(false);
+              }
+            }}
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+          />
+        ) : (
+          <span
+            className={cn(
+              "pr-10 text-sm font-medium",
+              isActive ? "text-zinc-100" : "text-zinc-400 group-hover:text-zinc-200"
+            )}
+          >
+            {title}
+          </span>
+        )}
+
+        {!isRenaming && (
+          <div
+            className={cn(
+              "absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity",
+              !disabled && "group-hover:opacity-100",
+              isActive && !disabled && "opacity-100"
+            )}
+          >
+            {isConfirmingDelete ? (
+              <>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete(event);
+                    setIsConfirmingDelete(false);
+                  }}
+                  className="rounded bg-zinc-800/80 p-1 text-red-400 transition-colors hover:bg-zinc-700 hover:text-red-300"
+                  title="Confirm"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                </button>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsConfirmingDelete(false);
+                  }}
+                  className="rounded bg-zinc-800/80 p-1 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-100"
+                  title="Cancel"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (disabled) return;
+                    setIsRenaming(true);
+                  }}
+                  className="rounded bg-zinc-800/80 p-1 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-100"
+                  title="Rename"
+                >
+                  <PenSquare size={12} />
+                </button>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (disabled) return;
+                    setIsConfirmingDelete(true);
+                  }}
+                  className="rounded bg-zinc-800/80 p-1 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400"
+                  title="Delete"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!isRenaming && (
+        <span
+          className={cn(
+            "text-[10px] font-semibold uppercase tracking-widest",
+            isActive ? "text-zinc-500" : "text-zinc-600"
+          )}
+        >
+          {isConfirmingDelete ? <span className="text-red-400/80">Confirm Delete?</span> : date}
+        </span>
+      )}
     </div>
   );
 }

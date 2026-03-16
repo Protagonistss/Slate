@@ -147,6 +147,16 @@ function createAssistantMessage(
   return assistantMessageIndex;
 }
 
+function buildConversationTitle(content: string): string {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '新对话';
+  }
+
+  const title = normalized.slice(0, 48);
+  return normalized.length > 48 ? `${title}...` : title;
+}
+
 function prepareMessageContext(content: string): MessageContext | null {
   const conversationStore = useConversationStore.getState();
   const configStore = useConfigStore.getState();
@@ -158,8 +168,20 @@ function prepareMessageContext(content: string): MessageContext | null {
   }
 
   let conversationId = conversationStore.currentConversationId;
+  const suggestedTitle = buildConversationTitle(content);
+
   if (!conversationId) {
-    conversationId = conversationStore.createConversation();
+    conversationId = conversationStore.createConversation(suggestedTitle);
+  } else {
+    const currentConversation = conversationStore.getConversation(conversationId);
+    const canReplacePlaceholderTitle =
+      currentConversation &&
+      currentConversation.messages.length === 0 &&
+      /^新对话(?:\s+\d+)?$/.test(currentConversation.title);
+
+    if (canReplacePlaceholderTitle) {
+      conversationStore.renameConversation(conversationId, suggestedTitle);
+    }
   }
 
   conversationStore.addMessage(conversationId, {
