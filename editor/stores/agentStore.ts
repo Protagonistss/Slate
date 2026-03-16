@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { streamBackendLLMChat } from '@/services/backend/llm';
 import { toolRegistry } from '../services/tools';
 import type {
@@ -110,6 +111,10 @@ const INTERNAL_AGENT_TOOL_NAMES = {
 } as const;
 
 const INTERNAL_AGENT_TOOL_SET = new Set<string>(Object.values(INTERNAL_AGENT_TOOL_NAMES));
+
+interface PersistedAgentState {
+  runsByConversation: Record<string, AgentRun>;
+}
 
 export interface AgentState {
   status: AgentStatus;
@@ -481,6 +486,70 @@ function deriveRunPhase(run: AgentRun): AgentRunPhase {
   }
 
   return 'paused';
+}
+
+function derivePersistedRunPhase(run: AgentRun): AgentRunPhase {
+  if (run.error) {
+    return 'error';
+  }
+
+  if (run.steps.length === 0) {
+    return 'paused';
+  }
+
+  const hasBlocked = run.steps.some((step) => step.status === 'blocked');
+  const hasPending = run.steps.some((step) => step.status === 'pending');
+  const hasRunning = run.steps.some((step) => step.status === 'running');
+
+  if (hasBlocked) {
+    return 'error';
+  }
+
+  if (hasRunning || hasPending) {
+    return 'paused';
+  }
+
+  return 'completed';
+}
+
+function normalizePersistedRun(run: AgentRun): AgentRun {
+  const steps = Array.isArray(run.steps)
+    ? run.steps.map((step) => ({
+        ...step,
+        status: step.status === 'running' ? 'pending' : step.status,
+      }))
+    : [];
+
+  const fallbackActiveStepId =
+    (run.activeStepId && steps.some((step) => step.id === run.activeStepId) && run.activeStepId) ||
+    steps.find((step) => step.status === 'pending')?.id ||
+    steps[steps.length - 1]?.id ||
+    null;
+
+  const nextRun: AgentRun = {
+    ...run,
+    steps,
+    artifacts: Array.isArray(run.artifacts) ? run.artifacts : [],
+    reasoningEntries: Array.isArray(run.reasoningEntries) ? run.reasoningEntries : [],
+    activeStepId: fallbackActiveStepId,
+    phase: derivePersistedRunPhase({ ...run, steps }),
+  };
+
+  return nextRun;
+}
+
+function normalizePersistedRuns(
+  runsByConversation: Record<string, AgentRun> | null | undefined
+): Record<string, AgentRun> {
+  if (!runsByConversation || typeof runsByConversation !== 'object') {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(runsByConversation)
+      .filter(([, run]) => Boolean(run && typeof run === 'object'))
+      .map(([conversationId, run]) => [conversationId, normalizePersistedRun(run)])
+  );
 }
 
 function setStepStatus(
@@ -1212,7 +1281,8 @@ async function runExecutionLoop(
   }
 }
 
-export const useAgentStore = create<AgentState>((set, get) => ({
+export const useAgentStore = create<AgentState>()(
+  persist((set, get) => ({
   status: 'idle',
   isProcessing: false,
   currentStreamContent: '',
@@ -1580,4 +1650,25 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       error: null,
       abortController: null,
     }),
-}));
+}),
+{
+  name: 'protagonist-agent-runs',
+  partialize: (state): PersistedAgentState => ({
+    runsByConversation: state.runsByConversation,
+  }),
+  merge: (persistedState, currentState) => {
+    const persisted = persistedState as Partial<PersistedAgentState> | undefined;
+
+    return {
+      ...currentState,
+      status: 'idle',
+      isProcessing: false,
+      currentStreamContent: '',
+      currentToolCalls: [],
+      error: null,
+      abortController: null,
+      runsByConversation: normalizePersistedRuns(persisted?.runsByConversation),
+    };
+  },
+}
+));
