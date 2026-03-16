@@ -1,5 +1,5 @@
-import { get } from "@/services/tauri/http";
-import { getBackendBaseUrl } from "./auth";
+import { buildBackendUrl, getBackendErrorMessage } from "./base";
+import { requestBackend, requestBackendStream } from "./client";
 import type { Message, StreamChunk, ToolDefinition } from "@/services/llm/types";
 
 export interface BackendLLMProvider {
@@ -40,169 +40,109 @@ export interface BackendLLMProviderUpsertRequest {
   default_model?: string | null;
 }
 
-function buildUrl(path: string): string {
-  return `${getBackendBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-function getBackendTargetLabel(): string {
-  const baseUrl = getBackendBaseUrl();
-  if (!baseUrl.startsWith("/")) {
-    return baseUrl;
-  }
-
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}${baseUrl}`;
-  }
-
-  return baseUrl;
-}
-
-function getNetworkErrorMessage(error: unknown, fallback: string): string {
-  const detail =
-    error instanceof Error && error.message
-      ? error.message
-      : typeof error === "string" && error.trim()
-        ? error
-        : "network error";
-
-  return `${fallback}：无法连接 backend（${getBackendTargetLabel()}）。请确认 backend 已启动，并且 Vite 代理或 VITE_BACKEND_URL 配置正确。原始错误：${detail}`;
-}
-
-function getErrorMessage(status: number, data: unknown, fallback: string): string {
-  if (data && typeof data === "object" && typeof (data as { detail?: unknown }).detail === "string") {
-    return (data as { detail: string }).detail;
-  }
-
-  if (typeof data === "string" && data.trim()) {
-    return data;
-  }
-
-  return `${fallback}（HTTP ${status}）`;
-}
-
-export async function listBackendLLMProviders(accessToken: string): Promise<BackendLLMProvider[]> {
-  const response = await get(buildUrl("/llm/providers"), {
-    Authorization: `Bearer ${accessToken}`,
+export async function listBackendLLMProviders(): Promise<BackendLLMProvider[]> {
+  const response = await requestBackend({
+    url: buildBackendUrl("/llm/providers"),
+    auth: "required",
+    networkErrorMessage: "获取模型目录失败",
   });
 
   if (!response.ok || !Array.isArray(response.data)) {
-    throw new Error(getErrorMessage(response.status, response.data, "获取模型目录失败"));
+    throw new Error(getBackendErrorMessage(response.status, response.data, "获取模型目录失败"));
   }
 
   return response.data as BackendLLMProvider[];
 }
 
-export async function listBackendLLMModels(accessToken: string): Promise<BackendLLMModel[]> {
-  const response = await get(buildUrl("/llm/models"), {
-    Authorization: `Bearer ${accessToken}`,
+export async function listBackendLLMModels(): Promise<BackendLLMModel[]> {
+  const response = await requestBackend({
+    url: buildBackendUrl("/llm/models"),
+    auth: "required",
+    networkErrorMessage: "获取模型列表失败",
   });
 
   if (!response.ok || !Array.isArray(response.data)) {
-    throw new Error(getErrorMessage(response.status, response.data, "获取模型列表失败"));
+    throw new Error(getBackendErrorMessage(response.status, response.data, "获取模型列表失败"));
   }
 
   return response.data as BackendLLMModel[];
 }
 
 export async function createBackendLLMProvider(
-  accessToken: string,
   payload: BackendLLMProviderUpsertRequest
 ): Promise<BackendLLMProvider> {
-  let response: Response;
+  const response = await requestBackend({
+    url: buildBackendUrl("/llm/providers"),
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: payload,
+    auth: "required",
+    networkErrorMessage: "保存模型 Provider 失败",
+  });
 
-  try {
-    response = await fetch(buildUrl("/llm/providers"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    throw new Error(getNetworkErrorMessage(error, "保存模型 Provider 失败"));
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    throw new Error(getBackendErrorMessage(response.status, response.data, "保存模型 Provider 失败"));
   }
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok || !data || typeof data !== "object") {
-    throw new Error(getErrorMessage(response.status, data, "保存模型 Provider 失败"));
-  }
-
-  return data as BackendLLMProvider;
+  return response.data as BackendLLMProvider;
 }
 
 export async function updateBackendLLMProvider(
-  accessToken: string,
   providerName: string,
   payload: BackendLLMProviderUpsertRequest
 ): Promise<BackendLLMProvider> {
-  let response: Response;
+  const response = await requestBackend({
+    url: buildBackendUrl(`/llm/providers/${encodeURIComponent(providerName)}`),
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: payload,
+    auth: "required",
+    networkErrorMessage: "更新模型 Provider 失败",
+  });
 
-  try {
-    response = await fetch(buildUrl(`/llm/providers/${encodeURIComponent(providerName)}`), {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    throw new Error(getNetworkErrorMessage(error, "更新模型 Provider 失败"));
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    throw new Error(getBackendErrorMessage(response.status, response.data, "更新模型 Provider 失败"));
   }
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok || !data || typeof data !== "object") {
-    throw new Error(getErrorMessage(response.status, data, "更新模型 Provider 失败"));
-  }
-
-  return data as BackendLLMProvider;
+  return response.data as BackendLLMProvider;
 }
 
-export async function deleteBackendLLMProvider(accessToken: string, providerName: string): Promise<void> {
-  let response: Response;
-
-  try {
-    response = await fetch(buildUrl(`/llm/providers/${encodeURIComponent(providerName)}`), {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-  } catch (error) {
-    throw new Error(getNetworkErrorMessage(error, "删除模型 Provider 失败"));
-  }
+export async function deleteBackendLLMProvider(providerName: string): Promise<void> {
+  const response = await requestBackend({
+    url: buildBackendUrl(`/llm/providers/${encodeURIComponent(providerName)}`),
+    method: "DELETE",
+    auth: "required",
+    networkErrorMessage: "删除模型 Provider 失败",
+  });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new Error(getErrorMessage(response.status, data, "删除模型 Provider 失败"));
+    throw new Error(getBackendErrorMessage(response.status, response.data, "删除模型 Provider 失败"));
   }
 }
 
 export async function* streamBackendLLMChat(
-  accessToken: string,
   payload: BackendLLMChatRequest,
   signal?: AbortSignal
 ): AsyncGenerator<StreamChunk> {
-  let response: Response;
-
-  try {
-    response = await fetch(buildUrl("/llm/chat/stream"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-      signal,
-    });
-  } catch (error) {
-    throw new Error(getNetworkErrorMessage(error, "调用模型网关失败"));
-  }
+  const response = await requestBackendStream({
+    url: buildBackendUrl("/llm/chat/stream"),
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: payload,
+    signal,
+    auth: "required",
+    networkErrorMessage: "调用模型网关失败",
+  });
 
   if (!response.ok) {
     const data = await response.json().catch(async () => response.text().catch(() => null));
-    throw new Error(getErrorMessage(response.status, data, "调用模型网关失败"));
+    throw new Error(getBackendErrorMessage(response.status, data, "调用模型网关失败"));
   }
 
   if (!response.body) {

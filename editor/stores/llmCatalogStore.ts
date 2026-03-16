@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { listBackendLLMModels, listBackendLLMProviders, type BackendLLMModel, type BackendLLMProvider } from "@/services/backend/llm";
+import { isSessionExpiredError } from "@/services/backend/client";
 import { useAuthStore } from "./authStore";
 
 interface LLMCatalogState {
@@ -24,8 +25,8 @@ async function loadCatalog(): Promise<{ providers: BackendLLMProvider[]; models:
   }
 
   const [providers, models] = await Promise.all([
-    listBackendLLMProviders(accessToken),
-    listBackendLLMModels(accessToken),
+    listBackendLLMProviders(),
+    listBackendLLMModels(),
   ]);
 
   return { providers, models };
@@ -66,6 +67,17 @@ export const useLLMCatalogStore = create<LLMCatalogState>((set, get) => ({
             return;
           }
 
+          if (isSessionExpiredError(error)) {
+            set({
+              providers: [],
+              models: [],
+              initialized: false,
+              isLoading: false,
+              error: null,
+            });
+            return;
+          }
+
           set({
             providers: [],
             models: [],
@@ -101,6 +113,17 @@ export const useLLMCatalogStore = create<LLMCatalogState>((set, get) => ({
       });
     } catch (error) {
       if (currentRequestVersion !== requestVersion) {
+        return;
+      }
+
+      if (isSessionExpiredError(error)) {
+        set({
+          providers: [],
+          models: [],
+          initialized: false,
+          isLoading: false,
+          error: null,
+        });
         return;
       }
 

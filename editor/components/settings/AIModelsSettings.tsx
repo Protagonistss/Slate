@@ -3,6 +3,7 @@ import { LogIn, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
+import { isSessionExpiredError } from "@/services/backend/client";
 import { getBackendBaseUrl, type AuthUser } from "@/services/backend/auth";
 import {
   createBackendLLMProvider,
@@ -209,7 +210,7 @@ export function AIModelsSettings() {
           throw new Error("请先登录 backend 账号");
         }
 
-        const saved = await updateBackendLLMProvider(accessToken, provider.name, {
+        const saved = await updateBackendLLMProvider(provider.name, {
           display_name: draft.displayName.trim(),
           base_url: draft.baseUrl.trim(),
           api_key: draft.apiKey.trim() || undefined,
@@ -238,6 +239,10 @@ export function AIModelsSettings() {
         message: `已保存 ${provider.source === "custom" ? draft.displayName.trim() || provider.display_name : provider.display_name}`,
       });
     } catch (saveError) {
+      if (isSessionExpiredError(saveError)) {
+        return;
+      }
+
       addToast({
         type: "error",
         message: saveError instanceof Error ? saveError.message : "保存 Provider 失败",
@@ -255,12 +260,16 @@ export function AIModelsSettings() {
 
     try {
       setPendingProvider(provider.name);
-      await deleteBackendLLMProvider(accessToken, provider.name);
+      await deleteBackendLLMProvider(provider.name);
       await refresh();
       syncLLMProviders(useLLMCatalogStore.getState().providers);
       setEditingProvider(null);
       addToast({ type: "success", message: `已删除 ${provider.display_name}` });
     } catch (deleteError) {
+      if (isSessionExpiredError(deleteError)) {
+        return;
+      }
+
       addToast({
         type: "error",
         message: deleteError instanceof Error ? deleteError.message : "删除 Provider 失败",
@@ -291,7 +300,7 @@ export function AIModelsSettings() {
 
     try {
       setIsSavingCustomProvider(true);
-      const provider = await createBackendLLMProvider(accessToken, {
+      const provider = await createBackendLLMProvider({
         display_name: customProviderName.trim(),
         base_url: customBaseUrl.trim(),
         api_key: customProviderKey.trim(),
@@ -310,6 +319,10 @@ export function AIModelsSettings() {
       resetCustomProviderForm();
       addToast({ type: "success", message: `已添加 ${provider.display_name}` });
     } catch (saveError) {
+      if (isSessionExpiredError(saveError)) {
+        return;
+      }
+
       addToast({
         type: "error",
         message: saveError instanceof Error ? saveError.message : "添加 Provider 失败",

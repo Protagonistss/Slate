@@ -1,4 +1,10 @@
-import { get, post } from "@/services/tauri/http";
+import { requestBackend } from "./client";
+import {
+  buildBackendAbsoluteUrl,
+  buildBackendUrl,
+  getBackendBaseUrl,
+  getBackendErrorMessage,
+} from "./base";
 
 export type OAuthProvider = "github" | "gitee" | "google";
 
@@ -15,10 +21,6 @@ interface BackendOAuthStartResponse {
   provider: string;
   authorization_url: string;
   state: string;
-}
-
-interface BackendDetailResponse {
-  detail?: string;
 }
 
 interface BackendTokenPairResponse {
@@ -59,47 +61,6 @@ export interface OAuthDeepLinkPayload {
   error: string | null;
 }
 
-const isTauri =
-  typeof window !== "undefined" &&
-  ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
-
-const backendBaseUrl = (() => {
-  const envValue =
-    typeof import.meta !== "undefined" && typeof import.meta.env.VITE_BACKEND_URL === "string"
-      ? import.meta.env.VITE_BACKEND_URL.trim()
-      : "";
-
-  const defaultBaseUrl = isTauri ? "http://127.0.0.1:8000/api/v1" : "/api/v1";
-
-  return (envValue || defaultBaseUrl).replace(/\/+$/, "");
-})();
-
-function buildUrl(path: string): string {
-  return `${backendBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-function buildAbsoluteUrl(path: string): string {
-  const url = buildUrl(path);
-  if (/^https?:\/\//i.test(url)) {
-    return url;
-  }
-
-  const origin =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : "http://localhost";
-
-  return new URL(url, origin).toString();
-}
-
-function getErrorMessage(status: number, data: unknown, fallback: string): string {
-  if (data && typeof data === "object" && typeof (data as BackendDetailResponse).detail === "string") {
-    return (data as BackendDetailResponse).detail as string;
-  }
-
-  return `${fallback}（HTTP ${status}）`;
-}
-
 function mapUser(user: BackendUser): AuthUser {
   return {
     id: user.id,
@@ -119,10 +80,6 @@ function mapTokenPair(payload: BackendTokenPairResponse): AuthSessionPayload {
     expiresIn: payload.expires_in,
     user: mapUser(payload.user),
   };
-}
-
-export function getBackendBaseUrl(): string {
-  return backendBaseUrl;
 }
 
 export function parseOAuthFragment(fragment: string): OAuthFragmentPayload {
@@ -167,24 +124,19 @@ export async function requestOAuthAuthorizationUrl(
   provider: OAuthProvider,
   redirectTo: string
 ): Promise<string> {
-  const url = new URL(buildAbsoluteUrl(`/auth/oauth/${provider}/start`));
+  const url = new URL(buildBackendAbsoluteUrl(`/auth/oauth/${provider}/start`));
   url.searchParams.set("redirect_to", redirectTo);
 
-  let response;
-
-  try {
-    response = await get(url.toString());
-  } catch (error) {
-    const message =
-      error instanceof Error && error.message
-        ? error.message
-        : `连接后端失败，请确认 ${backendBaseUrl} 已启动`;
-    throw new Error(message);
-  }
+  const response = await requestBackend({
+    url: url.toString(),
+    auth: "none",
+    retryOn401: false,
+    networkErrorMessage: `获取 ${provider} OAuth 授权地址失败`,
+  });
 
   if (!response.ok || !response.data || typeof response.data !== "object") {
     throw new Error(
-      getErrorMessage(response.status, response.data, `获取 ${provider} OAuth 授权地址失败`)
+      getBackendErrorMessage(response.status, response.data, `获取 ${provider} OAuth 授权地址失败`)
     );
   }
 
@@ -197,34 +149,55 @@ export async function requestOAuthAuthorizationUrl(
 }
 
 export async function exchangeOAuthTicket(ticket: string): Promise<AuthSessionPayload> {
-  const response = await post(buildUrl("/auth/oauth/exchange"), { ticket });
+  const response = await requestBackend({
+    url: buildBackendUrl("/auth/oauth/exchange"),
+    method: "POST",
+    body: { ticket },
+    auth: "none",
+    retryOn401: false,
+    networkErrorMessage: "兑换 OAuth 登录票据失败",
+  });
 
   if (!response.ok || !response.data || typeof response.data !== "object") {
-    throw new Error(getErrorMessage(response.status, response.data, "兑换 OAuth 登录票据失败"));
+    throw new Error(getBackendErrorMessage(response.status, response.data, "兑换 OAuth 登录票据失败"));
   }
 
   return mapTokenPair(response.data as BackendTokenPairResponse);
 }
 
-export async function fetchCurrentUser(accessToken: string): Promise<AuthUser> {
-  const response = await get(buildUrl("/me"), {
-    Authorization: `Bearer ${accessToken}`,
+export async function fetchCurrentUser(
+  accessToken: string,
+  options?: { retryOn401?: boolean }
+): Promise<AuthUser> {
+  const response = await requestBackend({
+    url: buildBackendUrl("/me"),
+    auth: "required",
+    accessTokenOverride: accessToken,
+    retryOn401: options?.retryOn401 ?? false,
+    networkErrorMessage: "获取当前用户信息失败",
   });
 
   if (!response.ok || !response.data || typeof response.data !== "object") {
-    throw new Error(getErrorMessage(response.status, response.data, "获取当前用户信息失败"));
+    throw new Error(getBackendErrorMessage(response.status, response.data, "获取当前用户信息失败"));
   }
 
   return mapUser(response.data as BackendUser);
 }
 
 export async function refreshSession(refreshToken: string): Promise<AuthSessionPayload> {
-  const response = await post(buildUrl("/auth/refresh"), {
-    refresh_token: refreshToken,
+  const response = await requestBackend({
+    url: buildBackendUrl("/auth/refresh"),
+    method: "POST",
+    body: {
+      refresh_token: refreshToken,
+    },
+    auth: "none",
+    retryOn401: false,
+    networkErrorMessage: "刷新登录会话失败",
   });
 
   if (!response.ok || !response.data || typeof response.data !== "object") {
-    throw new Error(getErrorMessage(response.status, response.data, "刷新登录会话失败"));
+    throw new Error(getBackendErrorMessage(response.status, response.data, "刷新登录会话失败"));
   }
 
   return mapTokenPair(response.data as BackendTokenPairResponse);
@@ -234,21 +207,26 @@ export async function logoutSession(
   refreshToken: string | null,
   accessToken?: string | null
 ): Promise<void> {
-  const headers = accessToken
-    ? {
-        Authorization: `Bearer ${accessToken}`,
-      }
-    : undefined;
-
-  const response = await post(
-    buildUrl("/auth/logout"),
-    {
+  const response = await requestBackend({
+    url: buildBackendUrl("/auth/logout"),
+    method: "POST",
+    body: {
       refresh_token: refreshToken,
     },
-    headers
-  );
+    headers:
+      accessToken && accessToken.trim()
+        ? {
+            Authorization: `Bearer ${accessToken}`,
+          }
+        : undefined,
+    auth: "none",
+    retryOn401: false,
+    networkErrorMessage: "退出登录失败",
+  });
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(response.status, response.data, "退出登录失败"));
+    throw new Error(getBackendErrorMessage(response.status, response.data, "退出登录失败"));
   }
 }
+
+export { getBackendBaseUrl };

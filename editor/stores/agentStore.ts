@@ -1037,7 +1037,6 @@ async function planRun(
   };
 
   for await (const chunk of streamBackendLLMChat(
-    context.accessToken,
     {
       provider: context.llmConfig.provider,
       model: context.llmConfig.model,
@@ -1228,7 +1227,6 @@ async function runExecutionLoop(
     let streamFailed = false;
 
     for await (const chunk of streamBackendLLMChat(
-      context.accessToken,
       {
         provider: context.llmConfig.provider,
         model: context.llmConfig.model,

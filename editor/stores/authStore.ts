@@ -10,6 +10,8 @@ import {
   type AuthUser,
   type OAuthProvider,
 } from "@/services/backend/auth";
+import { isSessionExpiredError, SESSION_EXPIRED_MESSAGE } from "@/services/backend/client";
+import { useUIStore } from "./uiStore";
 
 interface AuthState {
   user: AuthUser | null;
@@ -30,6 +32,8 @@ interface AuthState {
     provider: OAuthProvider | null
   ) => Promise<{ success: boolean; error?: string }>;
   refreshProfile: () => Promise<void>;
+  refreshAccessToken: () => Promise<string | null>;
+  handleSessionExpired: (message?: string) => void;
   restoreSession: () => Promise<void>;
   signOut: () => Promise<void>;
   clearSession: () => void;
@@ -46,11 +50,42 @@ const resettableState = {
   error: null,
 };
 
+const SESSION_EXPIRED_TOAST_COOLDOWN_MS = 3000;
+
+let refreshAccessTokenPromise: Promise<string | null> | null = null;
+let lastSessionExpiredToastAt = 0;
+
+type AuthStoreSetter = (
+  partial: Partial<AuthState> | ((state: AuthState) => Partial<AuthState>)
+) => void;
+
+function clearPersistedSession(set: AuthStoreSetter, preserveTicket: string | null) {
+  set({
+    ...resettableState,
+    lastHandledOAuthTicket: preserveTicket,
+  });
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       ...resettableState,
       lastHandledOAuthTicket: null,
+
+      handleSessionExpired: (message = SESSION_EXPIRED_MESSAGE) => {
+        const preserveTicket = get().lastHandledOAuthTicket;
+        clearPersistedSession(set, preserveTicket);
+
+        const currentTime = Date.now();
+        if (currentTime - lastSessionExpiredToastAt >= SESSION_EXPIRED_TOAST_COOLDOWN_MS) {
+          useUIStore.getState().addToast({ type: "error", message });
+          lastSessionExpiredToastAt = currentTime;
+        }
+
+        void import("./llmCatalogStore").then(({ useLLMCatalogStore }) => {
+          useLLMCatalogStore.getState().clear();
+        });
+      },
 
       beginOAuth: async (provider, redirectTo) => {
         set({ isLoading: true, error: null });
@@ -113,7 +148,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const user = await fetchCurrentUser(payload.accessToken);
+          const user = await fetchCurrentUser(payload.accessToken, { retryOn401: false });
           set({
             user,
             accessToken: payload.accessToken,
@@ -148,17 +183,56 @@ export const useAuthStore = create<AuthState>()(
 
         set({ isLoading: true, error: null });
         try {
-          const user = await fetchCurrentUser(accessToken);
+          const user = await fetchCurrentUser(accessToken, { retryOn401: true });
           set({ user, isLoading: false });
         } catch (error) {
+          if (isSessionExpiredError(error)) {
+            set({ isLoading: false });
+            throw error;
+          }
+
           const message = error instanceof Error ? error.message : "刷新当前用户信息失败";
           set({ isLoading: false, error: message });
           throw error;
         }
       },
 
+      refreshAccessToken: async () => {
+        if (refreshAccessTokenPromise) {
+          return refreshAccessTokenPromise;
+        }
+
+        const { refreshToken, currentOAuthProvider } = get();
+        if (!refreshToken) {
+          get().handleSessionExpired();
+          return null;
+        }
+
+        refreshAccessTokenPromise = (async () => {
+          try {
+            const session = await refreshSession(refreshToken);
+            set({
+              user: session.user,
+              accessToken: session.accessToken,
+              refreshToken: session.refreshToken,
+              tokenType: session.tokenType,
+              currentOAuthProvider,
+              error: null,
+            });
+            return session.accessToken;
+          } catch {
+            get().handleSessionExpired();
+            return null;
+          } finally {
+            refreshAccessTokenPromise = null;
+          }
+        })();
+
+        return refreshAccessTokenPromise;
+      },
+
       restoreSession: async () => {
-        const { accessToken, refreshToken, currentOAuthProvider } = get();
+        const { accessToken, refreshToken } = get();
         if (!accessToken && !refreshToken) {
           return;
         }
@@ -167,7 +241,7 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           if (accessToken) {
-            const user = await fetchCurrentUser(accessToken);
+            const user = await fetchCurrentUser(accessToken, { retryOn401: false });
             set({ user, isLoading: false, error: null });
             return;
           }
@@ -176,23 +250,13 @@ export const useAuthStore = create<AuthState>()(
         }
 
         if (!refreshToken) {
-          set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket }));
+          clearPersistedSession(set, get().lastHandledOAuthTicket);
           return;
         }
 
-        try {
-          const session = await refreshSession(refreshToken);
-          set({
-            user: session.user,
-            accessToken: session.accessToken,
-            refreshToken: session.refreshToken,
-            tokenType: session.tokenType,
-            currentOAuthProvider,
-            isLoading: false,
-            error: null,
-          });
-        } catch {
-          set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket }));
+        const refreshedToken = await get().refreshAccessToken();
+        if (refreshedToken) {
+          set({ isLoading: false, error: null });
         }
       },
 
@@ -206,10 +270,10 @@ export const useAuthStore = create<AuthState>()(
           // 退出登录时即使后端失败，也清理本地会话。
         }
 
-        set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket }));
+        clearPersistedSession(set, get().lastHandledOAuthTicket);
       },
 
-      clearSession: () => set((state) => ({ ...resettableState, lastHandledOAuthTicket: state.lastHandledOAuthTicket })),
+      clearSession: () => clearPersistedSession(set, get().lastHandledOAuthTicket),
       clearError: () => set({ error: null }),
     }),
     {
