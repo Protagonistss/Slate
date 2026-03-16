@@ -40,10 +40,10 @@ export interface EditorState {
 export const useEditorStore = create<EditorState>((set, get) => ({
   openFiles: [],
   activeFilePath: null,
-  theme: 'vs-dark',
-  fontSize: 14,
+  theme: 'slate-dark',
+  fontSize: 13,
   wordWrap: 'on',
-  minimap: true,
+  minimap: false,
   lineNumbers: 'on',
 
   openFile: (path, name, content, language = 'plaintext') =>

@@ -1,8 +1,19 @@
 .monaco-editor-wrapper {
   border-radius: 0;
   overflow: hidden;
+  background: #0a0a0a;
 }
 
 .monaco-editor-wrapper .monaco-editor {
   padding-top: 0;
+}
+
+.monaco-editor-wrapper .monaco-editor,
+.monaco-editor-wrapper .overflow-guard,
+.monaco-editor-wrapper .monaco-scrollable-element {
+  background: #0a0a0a !important;
+}
+
+.monaco-editor-wrapper .monaco-scrollable-element > .scrollbar > .slider {
+  border-radius: 999px;
 }

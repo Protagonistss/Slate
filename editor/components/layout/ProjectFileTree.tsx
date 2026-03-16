@@ -79,14 +79,14 @@ export function ProjectFileTree({ className }: ProjectFileTreeProps) {
   }
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn("flex h-full min-h-0 flex-col", className)}>
       <div className="px-2 pb-2">
         <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2">
           {currentProject.name}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-2">
-        <div className="space-y-0.5">
+      <div className="min-h-0 flex-1 overflow-y-auto pr-0 scrollbar-thin scrollbar-thumb-zinc-800">
+        <div className="space-y-0.5 pl-2 pr-1">
           {projectFiles.map(file => (
             <FileTreeItem
               key={file.path}

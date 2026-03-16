@@ -218,7 +218,14 @@ export function AppLayout() {
             <>
               <Panel defaultSize={18} minSize={15} maxSize={30} id="left-sidebar" order={1}>
                 <aside className="h-full bg-charcoal border-r border-graphite flex flex-col">
-                  <div className="p-4 flex flex-col gap-6 flex-1 overflow-y-auto scrollbar-thin">
+                  <div
+                    className={cn(
+                      "min-h-0 flex-1 py-4 flex flex-col gap-6",
+                      currentMode === "editor"
+                        ? "overflow-hidden pl-3 pr-0"
+                        : "overflow-y-auto scrollbar-thin px-3"
+                    )}
+                  >
                     {currentMode !== "editor" && currentMode !== "settings" && (
                       <section>
                         <div className="space-y-1">
@@ -249,8 +256,8 @@ export function AppLayout() {
                     )}
 
                     {currentMode === "editor" && (
-                      <section className="flex-1 flex flex-col overflow-hidden">
-                        <ProjectFileTree className="flex-1" />
+                      <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                        <ProjectFileTree className="flex-1 min-h-0" />
                       </section>
                     )}
 
@@ -323,9 +330,9 @@ export function AppLayout() {
 
           {/* Main Content Area */}
           <Panel id="main-content" order={2}>
-            <main className="h-full relative overflow-hidden">
-              <div className="absolute inset-0 bg-[#0a0a0a] rounded-xl sm:rounded-2xl border border-white/[0.04] shadow-[0_0_40px_-15px_rgba(0,0,0,0.5)] overflow-hidden m-0.5 sm:mb-2 sm:mt-1 sm:mx-2 lg:mb-4 lg:mt-2 lg:mx-4">
-                <div className="h-full w-full overflow-hidden relative rounded-xl sm:rounded-2xl flex flex-col">
+            <main className="h-full relative overflow-hidden flex flex-col bg-obsidian">
+              <div className="flex-1 h-full w-full relative flex flex-col z-0">
+                <div className="flex-1 h-full w-full relative flex flex-col z-0 bg-charcoal/20">
                   {isSettingsRoute ? (
                     <div className="h-full w-full">
                       <Outlet />
