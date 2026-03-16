@@ -82,8 +82,8 @@ async function scanDirectory(dirPath: string, baseDir: string = ''): Promise<Pro
   const files: ProjectFile[] = [];
 
   for (const entry of entries) {
-    // 跳过特定目录
-    if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'target' || entry.name === 'dist' || entry.name === '.git' || entry.name === 'build') {
+    // 只跳过系统级文件（.git 目录、macOS .DS_Store、Windows Thumbs.db）
+    if (entry.name === '.git' || entry.name === '.DS_Store' || entry.name === 'Thumbs.db') {
       continue;
     }
 
