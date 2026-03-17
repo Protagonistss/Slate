@@ -1,0 +1,45 @@
+// useAgentRun - Hook for agent run management
+import { useAgentStore } from '@/features/agent/store';
+import type { AgentRun, AgentRunPhase } from '@/features/agent/store/types';
+
+export function useAgentRun(conversationId?: string) {
+  const runsByConversation = useAgentStore((state) => state.runsByConversation);
+  const status = useAgentStore((state) => state.status);
+  const isProcessing = useAgentStore((state) => state.isProcessing);
+  const error = useAgentStore((state) => state.error);
+
+  const currentRun = conversationId
+    ? runsByConversation[conversationId]
+    : Object.values(runsByConversation)[0] || null;
+
+  const getRun = useAgentStore((state) => state.getRun);
+  const createRun = useAgentStore((state) => state.createRun);
+  const updateRun = useAgentStore((state) => state.updateRun);
+  const deleteRun = useAgentStore((state) => state.deleteRun);
+  const setRunPhase = useAgentStore((state) => state.setRunPhase);
+  const stopGeneration = useAgentStore((state) => state.stopGeneration);
+  const clearError = useAgentStore((state) => state.clearError);
+
+  return {
+    // State
+    currentRun,
+    status,
+    isProcessing,
+    error,
+
+    // Computed
+    phase: currentRun?.phase || ('idle' as AgentRunPhase),
+    steps: currentRun?.steps || [],
+    activeStepId: currentRun?.activeStepId || null,
+    hasError: !!error,
+
+    // Actions
+    getRun,
+    createRun,
+    updateRun,
+    deleteRun,
+    setRunPhase,
+    stopGeneration,
+    clearError,
+  };
+}

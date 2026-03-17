@@ -16,7 +16,8 @@ export type {
   ConfirmModal,
 } from './uiStore';
 
-export { useAgentStore } from './agentStore';
+// Re-export agent store from new location
+export { useAgentStore } from '@/features/agent/store';
 export type {
   AgentStatus,
   AgentRunPhase,
@@ -29,7 +30,7 @@ export type {
   AgentStep,
   AgentRun,
   AgentState,
-} from './agentStore';
+} from '@/features/agent/store/types';
 
 export { useProjectStore } from './projectStore';
 export type { ProjectState, ProjectInfo, ProjectFile } from './projectStore';

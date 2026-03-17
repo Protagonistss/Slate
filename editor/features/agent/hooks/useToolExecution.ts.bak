@@ -1,0 +1,31 @@
+// useToolExecution - Hook for tool execution management
+import { useAgentStore } from '@/features/agent/store';
+import type { ToolCallRecord } from '@/features/agent/store/types';
+
+export function useToolExecution() {
+  const currentToolCalls = useAgentStore((state) => state.currentToolCalls);
+  const executeToolCall = useAgentStore((state) => state.executeToolCall);
+
+  const addToolCall = useAgentStore((state) => state.addToolCall);
+  const updateToolCall = useAgentStore((state) => state.updateToolCall);
+  const removeToolCall = useAgentStore((state) => state.removeToolCall);
+  const clearToolCalls = useAgentStore((state) => state.clearToolCalls);
+
+  return {
+    // State
+    currentToolCalls,
+
+    // Computed
+    hasPendingToolCalls: currentToolCalls.some((call) => call.status === 'pending'),
+    runningToolCalls: currentToolCalls.filter((call) => call.status === 'running'),
+    completedToolCalls: currentToolCalls.filter((call) => call.status === 'success'),
+    failedToolCalls: currentToolCalls.filter((call) => call.status === 'error'),
+
+    // Actions
+    executeToolCall,
+    addToolCall,
+    updateToolCall,
+    removeToolCall,
+    clearToolCalls,
+  };
+}

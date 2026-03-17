@@ -1,0 +1,63 @@
+// useArtifacts - Hook for artifact management
+import { useAgentStore } from '@/features/agent/store';
+import type { ArtifactRef, ArtifactKind } from '@/features/agent/store/types';
+
+export function useArtifacts(conversationId?: string) {
+  const runsByConversation = useAgentStore((state) => state.runsByConversation);
+
+  const currentRun = conversationId
+    ? runsByConversation[conversationId]
+    : Object.values(runsByConversation)[0] || null;
+
+  const artifacts = currentRun?.artifacts || [];
+
+  const attachArtifactToRunByConversationId = useAgentStore(
+    (state) => state.attachArtifactToRunByConversationId
+  );
+
+  // Group artifacts by kind
+  const planArtifacts = artifacts.filter((a) => a.kind === 'plan');
+  const fileArtifacts = artifacts.filter((a) => a.kind === 'file');
+  const toolResultArtifacts = artifacts.filter((a) => a.kind === 'tool_result');
+  const noteArtifacts = artifacts.filter((a) => a.kind === 'note');
+
+  // Get artifacts for a specific step
+  const getStepArtifacts = (stepId: string): ArtifactRef[] => {
+    return artifacts.filter((a) => a.stepId === stepId);
+  };
+
+  // Get artifact by path
+  const getArtifactByPath = (path: string): ArtifactRef | undefined => {
+    return artifacts.find((a) => a.path === path);
+  };
+
+  // Get most recent artifact of a kind
+  const getMostRecentArtifact = (kind?: ArtifactKind): ArtifactRef | undefined => {
+    const filtered = kind ? artifacts.filter((a) => a.kind === kind) : artifacts;
+    return filtered.sort((a, b) => b.createdAt - a.createdAt)[0];
+  };
+
+  return {
+    // State
+    artifacts,
+
+    // Grouped by kind
+    planArtifacts,
+    fileArtifacts,
+    toolResultArtifacts,
+    noteArtifacts,
+
+    // Computed
+    artifactsCount: artifacts.length,
+    hasPlanArtifacts: planArtifacts.length > 0,
+    hasFileArtifacts: fileArtifacts.length > 0,
+    hasToolResultArtifacts: toolResultArtifacts.length > 0,
+    hasNoteArtifacts: noteArtifacts.length > 0,
+
+    // Actions
+    attachArtifact: attachArtifactToRunByConversationId,
+    getStepArtifacts,
+    getArtifactByPath,
+    getMostRecentArtifact,
+  };
+}

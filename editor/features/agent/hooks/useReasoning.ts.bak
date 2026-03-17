@@ -1,0 +1,43 @@
+// useReasoning - Hook for agent reasoning management
+import { useAgentStore } from '@/features/agent/store';
+import type { ReasoningEntry, AgentReasoningPhase } from '@/features/agent/store/types';
+
+export function useReasoning(conversationId?: string) {
+  const runsByConversation = useAgentStore((state) => state.runsByConversation);
+
+  const currentRun = conversationId
+    ? runsByConversation[conversationId]
+    : Object.values(runsByConversation)[0] || null;
+
+  const reasoningEntries = currentRun?.reasoningEntries || [];
+  const lastAssistantMessage = currentRun?.lastAssistantMessage || '';
+
+  const addReasoningEntry = useAgentStore((state) => state.addReasoningEntryToRun);
+  const updateLastAssistantMessage = useAgentStore((state) => state.updateLastAssistantMessage);
+
+  // Group reasoning entries by phase
+  const planningReasoning = reasoningEntries.filter((e) => e.phase === 'planning');
+  const executionReasoning = reasoningEntries.filter((e) => e.phase === 'execution');
+  const toolReasoning = reasoningEntries.filter((e) => e.phase === 'tool');
+
+  // Get reasoning for a specific step
+  const getStepReasoning = (stepId: string): ReasoningEntry[] => {
+    return reasoningEntries.filter((e) => e.stepId === stepId);
+  };
+
+  return {
+    // State
+    reasoningEntries,
+    lastAssistantMessage,
+
+    // Grouped by phase
+    planningReasoning,
+    executionReasoning,
+    toolReasoning,
+
+    // Actions
+    addReasoningEntry,
+    updateLastAssistantMessage,
+    getStepReasoning,
+  };
+}

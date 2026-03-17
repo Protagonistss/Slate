@@ -1,0 +1,50 @@
+// useAgent - Main agent hook combining all agent functionality
+import { useAgentRun } from './useAgentRun';
+import { useToolExecution } from './useToolExecution';
+import { useReasoning } from './useReasoning';
+import { useArtifacts } from './useArtifacts';
+import { useAgentStore } from '@/features/agent/store';
+
+export function useAgent(conversationId?: string) {
+  const run = useAgentRun(conversationId);
+  const tools = useToolExecution();
+  const reasoning = useReasoning(conversationId);
+  const artifacts = useArtifacts(conversationId);
+
+  const sendMessage = useAgentStore((state) => state.sendMessage);
+  const resumeRun = useAgentStore((state) => state.resumeRun);
+  const retryStep = useAgentStore((state) => state.retryStep);
+  const reset = useAgentStore((state) => state.reset);
+
+  return {
+    // Run management
+    ...run,
+
+    // Tool execution
+    ...tools,
+
+    // Reasoning
+    ...reasoning,
+
+    // Artifacts
+    ...artifacts,
+
+    // High-level actions
+    sendMessage,
+    resumeRun,
+    retryStep,
+    reset,
+
+    // Computed states
+    isIdle: run.status === 'idle',
+    isThinking: run.status === 'thinking',
+    isStreaming: run.status === 'streaming',
+    isProcessing: run.isProcessing,
+  };
+}
+
+// Re-export individual hooks for convenience
+export { useAgentRun } from './useAgentRun';
+export { useToolExecution } from './useToolExecution';
+export { useReasoning } from './useReasoning';
+export { useArtifacts } from './useArtifacts';
