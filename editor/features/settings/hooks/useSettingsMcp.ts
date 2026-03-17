@@ -1,5 +1,5 @@
 // useSettingsMcp - 设置页面 MCP 配置相关逻辑
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useMcpStore, useProjectStore, useUIStore } from "@/stores";
 import { confirmDialog } from "@/services/tauri/dialog";
 import { isTauriEnvironment } from "@/services/tauri/deepLink";
@@ -10,36 +10,6 @@ import type {
   McpToolDescriptor,
 } from "@/services/mcp";
 import type { McpServerDraft } from "../tabs/MCPSettings";
-
-export interface UseSettingsMcpResult {
-  currentProject: ReturnType<typeof useProjectStore.getState>["currentProject"];
-  servers: McpServerStatus[];
-  tools: McpToolDescriptor[];
-  isLoading: boolean;
-  mcpSupported: boolean;
-  scopeOptions: readonly { value: McpConfigScope; label: string }[];
-  formOpen: boolean;
-  draft: McpServerDraft;
-  configText: string;
-  searchQuery: string;
-  parsedSuccessfully: boolean;
-  setFormOpen: (open: boolean) => void;
-  setDraft: React.Dispatch<React.SetStateAction<McpServerDraft>>;
-  setConfigText: React.Dispatch<React.SetStateAction<string>>;
-  setSearchQuery: (query: string) => void;
-  openNewForm: () => void;
-  openEditForm: (server: McpServerStatus) => void;
-  handleSaveServer: () => Promise<void>;
-  handleToggleServer: (server: McpServerStatus) => Promise<void>;
-  handleRetryServer: (server: McpServerStatus) => Promise<void>;
-  handleDeleteServer: (server: McpServerStatus) => Promise<void>;
-  handleDeleteDraft: () => Promise<void>;
-  parseConfigText: (text: string) => void;
-  scopePathHint: string;
-  scopePathLabel: string;
-  isEditing: boolean;
-  refreshServers: () => Promise<void>;
-}
 
 export interface UseSettingsMcpResult {
   currentProject: ReturnType<typeof useProjectStore.getState>["currentProject"];
@@ -248,7 +218,6 @@ export function useSettingsMcp(): UseSettingsMcpResult {
   const servers = useMcpStore((state) => state.servers);
   const tools = useMcpStore((state) => state.tools);
   const isLoading = useMcpStore((state) => state.isLoading);
-  const refresh = useMcpStore((state) => state.refresh);
   const saveServer = useMcpStore((state) => state.saveServer);
   const deleteServer = useMcpStore((state) => state.deleteServer);
   const toggleServer = useMcpStore((state) => state.toggleServer);
@@ -262,13 +231,6 @@ export function useSettingsMcp(): UseSettingsMcpResult {
   const [parsedSuccessfully, setParsedSuccessfully] = useState(false);
 
   const mcpSupported = isTauriEnvironment();
-
-  // 刷新服务器列表（进入设置页面时）
-  useEffect(() => {
-    if (mcpSupported) {
-      refresh();
-    }
-  }, [mcpSupported, refresh]);
 
   // 计算路径信息
   const { hint: scopePathHint, label: scopePathLabel } = useMemo(
@@ -433,6 +395,5 @@ export function useSettingsMcp(): UseSettingsMcpResult {
     scopePathHint,
     scopePathLabel,
     isEditing,
-    refreshServers: refresh,
   };
 }

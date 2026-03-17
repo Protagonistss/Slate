@@ -49,7 +49,6 @@ export interface MCPSettingsProps {
   scopePathHint: string;
   scopePathLabel: string;
   isEditing: boolean;
-  refreshServers: () => Promise<void>;
 }
 
 export function MCPSettings({
@@ -77,7 +76,6 @@ export function MCPSettings({
   scopePathHint,
   scopePathLabel,
   isEditing,
-  refreshServers: _refreshServers,
 }: MCPSettingsProps) {
   // 根据搜索查询过滤服务器
   const filteredServers = servers.filter((server) => {

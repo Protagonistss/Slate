@@ -78,7 +78,6 @@ export function SettingsView() {
             scopePathHint={mcp.scopePathHint}
             scopePathLabel={mcp.scopePathLabel}
             isEditing={mcp.isEditing}
-            refreshServers={mcp.refreshServers}
           />
         );
       case "appearance":
