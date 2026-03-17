@@ -1,85 +1,52 @@
-# Tauri + Monaco 基础示例
+# Slate
 
-使用 **Tauri 2**（Rust 桌面壳） + **Vite + React + TypeScript** 前端，集成 **Monaco Editor** 的桌面代码编辑器基础模板。
+Slate 是一个由 AI 驱动的现代化代码编辑器，旨在通过深度集成的 AI Agent 和工具链，为开发者提供更智能、更高效的编程体验。
 
-## 技术栈
+## 🌟 核心特性
 
-- **Tauri 2**：桌面应用框架，Rust 后端
-- **Vite + React + TypeScript**：前端构建与 UI
-- **Monaco Editor**：VS Code 同款编辑器内核，支持语法高亮、多语言、IntelliSense 等
+- **AI Agent 执行**: 内置自主执行 Agent，能够根据自然语言描述完成复杂的工程任务。
+- **Monaco 编辑器集成**: 采用与 VS Code 相同的编辑器内核，支持丰富的编程语言特性。
+- **MCP 支持**: 支持 Model Context Protocol (MCP)，可轻松扩展 AI 的工具能力。
+- **跨平台支持**: 基于 Tauri 构建，支持 Windows、macOS 和 Linux。
 
-## 前置要求
+## 🏗️ 项目结构
 
-- [Node.js](https://nodejs.org/)（建议 18+）
+- [**editor/**](./editor/README.md): 基于 React + Vite 的前端编辑器源码。
+- [**backend/**](./backend/README.md): 基于 Python FastAPI 的后端服务，负责 LLM 网关和任务调度。
+- [**native/**](./native/README.md) 基于 Rust 的 Tauri 原生壳代码，处理系统级 API 调用。
+
+## 🚀 快速开始
+
+### 环境要求
+
+- [Node.js](https://nodejs.org/) (建议 18+)
 - [Rust](https://www.rust-lang.org/tools/install)
-- [Tauri 依赖](https://v2.tauri.app/start/install/)（如 Windows 上的 WebView2、Visual Studio 构建工具等）
+- [Python 3.10+](https://www.python.org/)
 
-## 快速开始
+### 开发模式
 
-```bash
-# 安装依赖
-npm install
+1. **安装前端依赖**:
+   ```bash
+   npm install
+   ```
 
-# 开发模式（会先启动 Vite 再启动 Tauri 窗口）
-npm run tauri dev
+2. **启动后端服务**:
+   详情请参阅 [backend/README.md](./backend/README.md)。
 
-# 仅启动前端（不启动 Tauri）
-npm run dev
-```
+3. **启动 Tauri 开发窗口**:
+   ```bash
+   npm run tauri:dev
+   ```
 
-## 构建产物
-
-```bash
-npm run tauri build
-```
-
-输出在 `src-tauri/target/release/`（或 debug 目录），具体路径见构建结束时的提示。
-
-## 项目结构
-
-```
-and/
-├── frontend/               # 前端源码
-│   ├── main.tsx            # 入口，先加载 monaco-setup
-│   ├── monaco-setup.ts     # Monaco Web Worker 配置（Vite 必须）
-│   ├── MonacoEditor.tsx    # 封装好的 Monaco 组件
-│   ├── App.tsx / App.css
-│   └── vite-env.d.ts
-├── src-tauri/              # Tauri Rust 工程（目录名由 Tauri 约定，不宜修改）
-│   ├── src/
-│   │   ├── lib.rs          # 应用启动与 Tauri 配置
-│   │   └── main.rs
-│   ├── capabilities/       # 权限与能力
-│   ├── tauri.conf.json     # Tauri 配置（窗口、构建、图标等）
-│   └── Cargo.toml
-├── index.html
-├── vite.config.ts
-└── package.json
-```
-
-## Monaco 集成要点
-
-1. **Worker 必须在首屏、且在任何 `monaco-editor` 引用之前配置**  
-   在 `src/main.tsx` 最顶部执行 `import "./monaco-setup"`，在 `monaco-setup.ts` 里通过 Vite 的 `?worker` 引入各语言 worker 并设置 `self.MonacoEnvironment.getWorker`。
-
-2. **使用 Vite 的 `getWorker` 方式**  
-   与 Webpack 的 `getWorkerUrl` 不同，Vite 用 `import xxx from '...?worker'` 得到 Worker 构造函数，在 `getWorker` 里 `return new xxx()` 即可。
-
-3. **窗口尺寸变化**  
-   组件里已设置 `automaticLayout: true`，Monaco 会随容器尺寸变化重新布局。
-
-## 图标
-
-若构建报错缺少图标，可先生成一套再构建：
+## 🛠️ 构建产物
 
 ```bash
-npm run tauri icon
+npm run tauri:build
 ```
 
-按提示选择一张至少 512×512 的 PNG，会在 `src-tauri/icons/` 下生成各尺寸图标。
+构建结果将根据平台生成在相应的 `native/target/release/bundle` 目录下。
 
-## 参考
+## 📄 参考文档
 
-- [Tauri 2 文档](https://v2.tauri.app/)
-- [Monaco Editor 官方文档](https://microsoft.github.io/monaco-editor/)
-- [Monaco + Vite 集成说明 (ESM)](https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-esm.md#using-vite)
+- [前端开发指南](./editor/README.md)
+- [后端开发指南](./backend/README.md)
