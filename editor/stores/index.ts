@@ -41,3 +41,6 @@ export { useLLMCatalogStore } from './llmCatalogStore';
 
 export { useTerminalStore } from '@/features/terminal/store';
 export type { TerminalSession, TerminalStatus } from '@/services/terminal/types';
+
+export { useStatusBarStore } from './statusBarStore';
+export type { StatusBarState } from './statusBarStore';

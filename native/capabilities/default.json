@@ -23,8 +23,38 @@
         "$HOME/.slate/**"
       ]
     },
-    "shell:allow-execute",
     "shell:allow-open",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "powershell",
+          "cmd": "powershell.exe",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "cmd",
+          "cmd": "cmd.exe",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "bash",
+          "cmd": "bash",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "sh",
+          "cmd": "sh",
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    },
+    "shell:allow-stdin-write",
+    "shell:allow-kill",
     {
       "identifier": "http:default",
       "allow": [

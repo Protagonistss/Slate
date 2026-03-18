@@ -1,12 +1,12 @@
 import { useEffect, useState, useRef } from "react";
 import { AnimatePresence } from "motion/react";
-import { Share2 } from "lucide-react";
 import { MonacoEditor, type MonacoEditorRef } from "@/components/editor/MonacoEditor";
 import { SimpleLogo } from "@/components/shared";
 import { useEditorStore } from "@/stores/editorStore";
 import { useProjectStore } from "@/stores";
+import { useStatusBarStore } from "@/stores/statusBarStore";
 import { getRecentProjects, type ProjectRecord } from "@/services/config";
-import { DEFAULT_CURSOR, formatLanguageLabel } from "./utils/editorConstants";
+import { DEFAULT_CURSOR } from "./utils/editorConstants";
 import { EditorTab } from "./components/EditorTab";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { AiInputBar } from "./components/AiInputBar";
@@ -33,8 +33,20 @@ export function EditorView() {
   const [recentProjects, setRecentProjects] = useState<ProjectRecord[]>([]);
 
   const editorState = useEditorState();
+  const { setCursor, setLanguage, setModel } = useStatusBarStore();
 
   const activeFile = openFiles.find((file) => file.path === activeFilePath) ?? null;
+
+  // Sync status bar (shown in AppLayout above terminal)
+  useEffect(() => {
+    setCursor(cursorPosition.lineNumber, cursorPosition.column);
+  }, [cursorPosition.lineNumber, cursorPosition.column, setCursor]);
+  useEffect(() => {
+    setLanguage(activeFile?.language ?? null);
+  }, [activeFile?.language, setLanguage]);
+  useEffect(() => {
+    setModel(editorState.selectedModel);
+  }, [editorState.selectedModel, setModel]);
 
   const handleCreateFile = () => {
     const emptyTemplate = `import React from 'react';
@@ -154,31 +166,6 @@ export default function Component() {
           onAcceptOrDiscard={editorState.handleAcceptOrDiscard}
         />
       </AnimatePresence>
-
-      {/* Status Bar */}
-      <div className="h-6 bg-charcoal border-t border-graphite px-4 flex items-center justify-between text-[10px] font-medium text-zinc-500 uppercase tracking-wider shrink-0">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-            <span>{formatLanguageLabel(activeFile?.language)}</span>
-          </div>
-          <span>
-            Ln {cursorPosition.lineNumber}, Col {cursorPosition.column}
-          </span>
-        </div>
-        <div className="flex items-center gap-4 min-w-0">
-          <span>UTF-8</span>
-          <span className="hidden md:inline">
-            {editorState.selectedModel === "claude-3.5-sonnet" && "Claude 3.5 Sonnet"}
-            {editorState.selectedModel === "claude-3.5-haiku" && "Claude 3.5 Haiku"}
-            {editorState.selectedModel === "gpt-4o-mini" && "GPT-4o Mini"}
-          </span>
-          <span className="flex items-center gap-1 hover:text-zinc-300 transition-colors cursor-pointer">
-            <Share2 size={10} />
-            Cloud Sync
-          </span>
-        </div>
-      </div>
     </div>
   );
 }

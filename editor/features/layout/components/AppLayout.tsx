@@ -14,6 +14,7 @@ import { Sidebar } from "./Sidebar/Sidebar";
 import { OAuthHandler } from "./OAuthHandler";
 import { TerminalPanel } from "@/features/terminal";
 import { useTerminalStore } from "@/features/terminal/store";
+import { StatusBar } from "./StatusBar";
 
 export function AppLayout() {
   const location = useLocation();
@@ -56,59 +57,63 @@ export function AppLayout() {
           rightSidebarOpen={rightSidebarOpen}
         />
 
-        <div className="flex-1 flex overflow-hidden">
-          <PanelGroup direction="vertical">
-            <Panel id="main-workspace" order={1} defaultSize={terminalPanelVisible ? 80 : 100} minSize={50}>
-              <PanelGroup direction="horizontal">
-                <Sidebar
-                  isOpen={leftSidebarOpen}
-                  currentMode={currentMode}
-                />
-                {leftSidebarOpen && (
-                  <PanelResizeHandle className="w-px bg-graphite hover:bg-zinc-600 transition-colors" />
-                )}
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          <div className="flex-1 flex overflow-hidden min-h-0">
+            <PanelGroup direction="horizontal">
+              <Sidebar
+                isOpen={leftSidebarOpen}
+                currentMode={currentMode}
+              />
+              {leftSidebarOpen && (
+                <PanelResizeHandle className="w-px bg-graphite hover:bg-zinc-600 transition-colors" />
+              )}
 
-                <Panel id="main-content" order={2}>
-                  <main className="h-full relative overflow-hidden flex flex-col bg-obsidian">
-                    <div className="flex-1 h-full w-full relative flex flex-col z-0">
-                      <div className="flex-1 h-full w-full relative flex flex-col z-0 bg-charcoal/20">
-                        {!shouldAnimateOutlet ? (
-                          <div className="h-full w-full">
-                            <Outlet />
-                          </div>
-                        ) : (
-                          <AnimatePresence initial={false} mode="sync">
-                            <motion.div
-                              key={location.pathname}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              transition={{ duration: 0.15, ease: "easeOut" }}
-                              className="h-full w-full"
-                            >
+              <Panel id="center-area" order={2} defaultSize={100} minSize={30}>
+                <PanelGroup direction="vertical">
+                  <Panel id="main-content" order={1} defaultSize={terminalPanelVisible ? 70 : 100} minSize={30}>
+                    <main className="h-full relative overflow-hidden flex flex-col bg-obsidian">
+                      <div className="flex-1 h-full w-full relative flex flex-col z-0">
+                        <div className="flex-1 h-full w-full relative flex flex-col z-0 bg-charcoal/20">
+                          {!shouldAnimateOutlet ? (
+                            <div className="h-full w-full">
                               <Outlet />
-                            </motion.div>
-                          </AnimatePresence>
-                        )}
+                            </div>
+                          ) : (
+                            <AnimatePresence initial={false} mode="sync">
+                              <motion.div
+                                key={location.pathname}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.15, ease: "easeOut" }}
+                                className="h-full w-full"
+                              >
+                                <Outlet />
+                              </motion.div>
+                            </AnimatePresence>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </main>
-                </Panel>
+                    </main>
+                  </Panel>
 
-                {rightSidebarOpen && (
-                  <>
-                    <PanelResizeHandle className="w-px bg-graphite hover:bg-zinc-600 transition-colors" />
-                    <RightSidebar onClose={() => setRightSidebarOpen(false)} />
-                  </>
-                )}
-              </PanelGroup>
-            </Panel>
+                  <TerminalPanel
+                    isMaximized={terminalMaximized}
+                    onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
+                  />
+                </PanelGroup>
+              </Panel>
 
-            <TerminalPanel
-              isMaximized={terminalMaximized}
-              onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
-            />
-          </PanelGroup>
+              {rightSidebarOpen && (
+                <>
+                  <PanelResizeHandle className="w-px bg-graphite hover:bg-zinc-600 transition-colors" />
+                  <RightSidebar onClose={() => setRightSidebarOpen(false)} />
+                </>
+              )}
+            </PanelGroup>
+          </div>
+
+          <StatusBar />
         </div>
 
         <AIStatusIndicator />
@@ -157,12 +162,16 @@ function RightSidebar({ onClose }: { onClose: () => void }) {
 
 function AIStatusIndicator() {
   return (
-    <div className="fixed bottom-4 left-4 z-50">
-      <div className="slate-glass px-3 py-2 rounded-full flex items-center gap-2 border border-zinc-800 shadow-2xl">
-        <div className="w-5 h-5 ai-pulse">
-          <SimpleLogo size={20} />
+    <div
+      className="fixed left-4 z-40 pointer-events-none"
+      style={{ bottom: 'calc(1.75rem + 10px)' }}
+      aria-hidden
+    >
+      <div className="slate-glass px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10 shadow-lg backdrop-blur-md bg-zinc-900/70">
+        <div className="w-4 h-4 ai-pulse flex items-center justify-center">
+          <SimpleLogo size={16} />
         </div>
-        <span className="text-[10px] font-bold text-zinc-400 tracking-wider">SLATE AI READY</span>
+        <span className="text-[10px] font-medium text-zinc-400 tracking-wide">Slate AI Ready</span>
       </div>
     </div>
   );

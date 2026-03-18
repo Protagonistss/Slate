@@ -24,12 +24,12 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   panelVisible: false,
   panelHeight: 200,
 
-  createSession: (cwd = process.cwd?.() || '~') => {
+  createSession: (cwd) => {
     const id = uuidv4();
     const session: TerminalSession = {
       id,
       title: `Terminal ${get().sessions.length + 1}`,
-      cwd,
+      cwd: cwd || '~',
       status: 'starting',
       createdAt: Date.now(),
     };

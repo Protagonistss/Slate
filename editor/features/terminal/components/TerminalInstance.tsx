@@ -16,6 +16,7 @@ export function TerminalInstance({ sessionId, cwd }: TerminalInstanceProps) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const updateSessionStatus = useTerminalStore((s) => s.updateSessionStatus);
 
@@ -34,10 +35,10 @@ export function TerminalInstance({ sessionId, cwd }: TerminalInstanceProps) {
 
     const xterm = new XTerm({
       theme: {
-        background: '#0a0a0a',
+        background: '#0c0c0c',
         foreground: '#d4d4d4',
         cursor: '#d4d4d4',
-        cursorAccent: '#0a0a0a',
+        cursorAccent: '#0c0c0c',
         selectionBackground: '#264f78',
         black: '#000000',
         red: '#cd3131',
@@ -79,7 +80,7 @@ export function TerminalInstance({ sessionId, cwd }: TerminalInstanceProps) {
     setTimeout(fitTerminal, 0);
 
     ptyBridge
-      .spawn({ cwd })
+      .spawn({ cwd, cols: 80, rows: 24 })
       .then((session) => {
         updateSessionStatus(sessionId, 'running');
 
@@ -92,7 +93,37 @@ export function TerminalInstance({ sessionId, cwd }: TerminalInstanceProps) {
           xterm.write(`\r\n\x1b[33mProcess exited with code ${code}\x1b[0m\r\n`);
         });
 
+        let lastCols: number | null = null;
+        let lastRows: number | null = null;
+        let raf: number | null = null;
+
+        const syncSize = () => {
+          fitTerminal();
+          const dims = fitAddon.proposeDimensions();
+          if (!dims) return;
+          if (dims.cols === lastCols && dims.rows === lastRows) return;
+          lastCols = dims.cols;
+          lastRows = dims.rows;
+          ptyBridge.resize(session.id, dims.cols, dims.rows).catch(() => {});
+        };
+
+        // Observe container resize (panel drag doesn't trigger window resize)
+        if (containerRef.current && typeof ResizeObserver !== 'undefined') {
+          const ro = new ResizeObserver(() => {
+            if (raf !== null) cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => {
+              raf = null;
+              syncSize();
+            });
+          });
+          ro.observe(containerRef.current);
+          resizeObserverRef.current = ro;
+        }
+
         cleanupRef.current = () => {
+          if (raf !== null) cancelAnimationFrame(raf);
+          resizeObserverRef.current?.disconnect();
+          resizeObserverRef.current = null;
           removeData();
           removeExit();
           ptyBridge.kill(session.id).catch(() => {});
@@ -105,6 +136,9 @@ export function TerminalInstance({ sessionId, cwd }: TerminalInstanceProps) {
         xterm.onResize(({ cols, rows }) => {
           ptyBridge.resize(session.id, cols, rows).catch(() => {});
         });
+
+        // Initial sync after first layout
+        setTimeout(syncSize, 50);
       })
       .catch((error) => {
         updateSessionStatus(sessionId, 'exited', 1);
@@ -126,8 +160,8 @@ export function TerminalInstance({ sessionId, cwd }: TerminalInstanceProps) {
   return (
     <div
       ref={containerRef}
-      className="h-full w-full p-1"
-      style={{ backgroundColor: '#0a0a0a' }}
+      className="h-full w-full p-2 rounded-b-lg overflow-hidden"
+      style={{ backgroundColor: '#0c0c0c' }}
     />
   );
 }
