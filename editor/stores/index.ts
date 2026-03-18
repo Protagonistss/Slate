@@ -16,7 +16,6 @@ export type {
   ConfirmModal,
 } from './uiStore';
 
-// Re-export agent store from new location
 export { useAgentStore } from '@/features/agent/store';
 export type {
   AgentStatus,
@@ -39,3 +38,6 @@ export { useMcpStore } from './mcpStore';
 
 export { useAuthStore } from './authStore';
 export { useLLMCatalogStore } from './llmCatalogStore';
+
+export { useTerminalStore } from '@/features/terminal/store';
+export type { TerminalSession, TerminalStatus } from '@/services/terminal/types';

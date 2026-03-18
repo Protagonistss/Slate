@@ -5,6 +5,7 @@ import { ToastContainer } from "./components/common";
 import { HomeView } from "@/features/home/views";
 import { EditorView } from "@/features/editor/views";
 import { AgentView } from "@/features/agent/views";
+import { OAuthCallbackView } from "@/features/auth/views";
 import { SettingsView } from "@/features/settings/views";
 import { useProjectStore } from "@/stores/projectStore";
 import { useAuthStore, useMcpStore, useConversationStore } from "@/stores";
@@ -55,6 +56,7 @@ function App() {
       Component: AppLayout,
       children: [
         { index: true, Component: HomeView },
+        { path: "auth/callback", Component: OAuthCallbackView },
         { path: "editor", Component: EditorView },
         { path: "agent/:conversationId?", Component: AgentView },
         { path: "settings", Component: SettingsView },

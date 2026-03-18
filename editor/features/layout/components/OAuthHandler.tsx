@@ -45,7 +45,7 @@ export function useOAuthHandler() {
 
         if (payload.error) {
           addToast({ type: "error", message: payload.error });
-          navigate("/settings?tab=account", { replace: true });
+          navigate("/settings#account", { replace: true });
           continue;
         }
 
@@ -74,7 +74,7 @@ export function useOAuthHandler() {
           addToast({ type: "error", message: result.error });
         }
 
-        navigate("/settings?tab=account", { replace: true });
+        navigate("/settings#account", { replace: true });
       }
     };
 

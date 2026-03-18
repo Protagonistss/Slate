@@ -152,7 +152,7 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
           </button>
           <div className="h-3.5 w-px bg-graphite" />
           <div
-            onClick={() => navigate("/settings?tab=account")}
+            onClick={() => navigate("/settings#account")}
             onMouseDown={(e) => e.stopPropagation()}
             className="h-7 w-7 ml-1 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center hover:bg-zinc-700 hover:border-zinc-600 transition-all cursor-pointer select-none"
             title={authUser ? "打开账号设置" : "登录与账号设置"}

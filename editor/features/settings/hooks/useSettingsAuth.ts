@@ -17,10 +17,21 @@ export interface UseSettingsAuthResult {
   handleDeleteAccount: () => Promise<void>;
 }
 
+function buildOAuthRedirectUri(provider: OAuthProvider): string {
+  if (isTauriEnvironment()) {
+    return "slate://auth/callback";
+  }
+
+  const redirectUrl = new URL("/auth/callback", window.location.origin);
+  redirectUrl.searchParams.set("provider", provider);
+  return redirectUrl.toString();
+}
+
 export function useSettingsAuth(): UseSettingsAuthResult {
   const addToast = useUIStore((state) => state.addToast);
   const user = useAuthStore((state) => state.user);
   const currentOAuthProvider = useAuthStore((state) => state.currentOAuthProvider);
+  const beginOAuth = useAuthStore((state) => state.beginOAuth);
   const [pendingOAuthProvider, setPendingOAuthProvider] = useState<OAuthProvider | null>(null);
   const [pendingAction, setPendingAction] = useState<"signOut" | null>(null);
   const backendBaseUrl = getBackendBaseUrl();
@@ -28,13 +39,12 @@ export function useSettingsAuth(): UseSettingsAuthResult {
   const handleOAuthSignIn = async (provider: OAuthProvider) => {
     setPendingOAuthProvider(provider);
     try {
-      const redirectUri = isTauriEnvironment()
-        ? "slate://oauth/callback"
-        : `${window.location.origin}/oauth/callback`;
-      const authUrl = `${backendBaseUrl}/oauth/authorize?provider=${provider}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      const redirectUri = buildOAuthRedirectUri(provider);
+      const authUrl = await beginOAuth(provider, redirectUri);
 
       if (isTauriEnvironment()) {
         await openUrl(authUrl);
+        setPendingOAuthProvider(null);
       } else {
         window.location.href = authUrl;
       }
