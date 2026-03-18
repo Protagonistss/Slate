@@ -5,6 +5,7 @@ import { SimpleLogo } from "@/components/shared";
 import { useEditorStore } from "@/stores/editorStore";
 import { useProjectStore } from "@/stores";
 import { useStatusBarStore } from "@/stores/statusBarStore";
+import { useGitStatusStore } from "@/stores/gitStatusStore";
 import { getRecentProjects, type ProjectRecord } from "@/services/config";
 import { DEFAULT_CURSOR } from "./utils/editorConstants";
 import { EditorTab } from "./components/EditorTab";
@@ -34,6 +35,8 @@ export function EditorView() {
 
   const editorState = useEditorState();
   const { setCursor, setLanguage, setModel } = useStatusBarStore();
+  const { scheduleRefresh } = useGitStatusStore();
+  const [gitDiffRefreshSeq, setGitDiffRefreshSeq] = useState(0);
 
   const activeFile = openFiles.find((file) => file.path === activeFilePath) ?? null;
 
@@ -65,6 +68,19 @@ export default function Component() {
     }
   }, [currentProject]);
 
+  // Refresh git status when project changes / window focus
+  useEffect(() => {
+    if (!currentProject?.path) return;
+    scheduleRefresh(currentProject.path, 0);
+
+    const onFocus = () => {
+      scheduleRefresh(currentProject.path, 150);
+      setGitDiffRefreshSeq((s) => s + 1);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [currentProject?.path, scheduleRefresh]);
+
   // Auto-select first file when no active file
   useEffect(() => {
     if (!activeFilePath && openFiles.length > 0) {
@@ -80,6 +96,7 @@ export default function Component() {
       return;
     }
     editorState.resetAiState(false);
+    setGitDiffRefreshSeq((s) => s + 1);
   }, [activeFile?.path]);
 
   return (
@@ -114,6 +131,9 @@ export default function Component() {
               wordWrap={wordWrap}
               minimap={minimap}
               lineNumbers={lineNumbers}
+              projectPath={currentProject?.path ?? null}
+              filePath={activeFile.path}
+              gitDiffRefreshSeq={gitDiffRefreshSeq}
               height="100%"
               className="h-full"
               onChange={(value) => {
@@ -121,6 +141,10 @@ export default function Component() {
               }}
               onSave={() => {
                 markFileModified(activeFile.path, false);
+                if (currentProject?.path) {
+                  scheduleRefresh(currentProject.path, 150);
+                }
+                setGitDiffRefreshSeq((s) => s + 1);
               }}
               onCursorPositionChange={(position) => {
                 setCursorPosition({

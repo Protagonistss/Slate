@@ -27,6 +27,9 @@ pub fn run() {
             // workspace
             commands::read_workspace_dir,
             commands::read_workspace_text_file,
+            // git
+            commands::get_git_status,
+            commands::get_git_diff_ranges,
             // config
             commands::get_config,
             commands::update_settings,

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useProjectStore, useEditorStore } from "@/stores";
 import { ProjectFile } from "@/services/project";
 import { getFileIcon } from "@/utils";
+import { useGitStatusStore, type GitStatusEntry } from "@/stores/gitStatusStore";
 import {
   FolderOpen,
   ChevronRight,
@@ -125,6 +126,65 @@ const FileTreeItem = memo(function FileTreeItem({
   const isActive = !isFolder && isFileActive(file);
   const loading = isLoading(file);
   const FileIcon = getFileIcon(file.name);
+  const statusByPath = useGitStatusStore((s) => s.statusByPath);
+
+  const getIndicatorForKind = (kind: GitStatusEntry["kind"]): { className: string } | null => {
+    switch (kind) {
+      case "conflict":
+        return { className: "bg-rose-400/70" };
+      case "modified":
+        return { className: "bg-zinc-500/70" };
+      case "added":
+        return { className: "bg-zinc-500/70" };
+      case "deleted":
+        return { className: "bg-zinc-500/70" };
+      case "renamed":
+        return { className: "bg-zinc-500/70" };
+      case "copied":
+        return { className: "bg-zinc-500/70" };
+      case "untracked":
+        return { className: "bg-zinc-500/70" };
+      default:
+        return null;
+    }
+  };
+
+  const kindPriority: Record<GitStatusEntry["kind"], number> = {
+    conflict: 100,
+    modified: 90,
+    deleted: 80,
+    added: 70,
+    renamed: 60,
+    copied: 50,
+    untracked: 40,
+    ignored: 0,
+    unknown: 0,
+  };
+
+  const getAggregatedStatus = (node: ProjectFile): GitStatusEntry | null => {
+    if (node.type === "file") {
+      const st = statusByPath[node.path];
+      if (!st || st.isIgnored) return null;
+      return st;
+    }
+
+    const children = node.children ?? [];
+    let best: GitStatusEntry | null = null;
+    for (const child of children) {
+      const st = getAggregatedStatus(child);
+      if (!st) continue;
+      if (!best || kindPriority[st.kind] > kindPriority[best.kind]) {
+        best = st;
+      }
+      if (best && best.kind === "conflict") {
+        break;
+      }
+    }
+    return best;
+  };
+
+  const effectiveStatus = getAggregatedStatus(file);
+  const indicator = effectiveStatus ? getIndicatorForKind(effectiveStatus.kind) : null;
 
   return (
     <div>
@@ -163,6 +223,17 @@ const FileTreeItem = memo(function FileTreeItem({
           <FileIcon size={14} className="text-zinc-500" />
         )}
         <span className="truncate">{loading ? '加载中...' : file.name}</span>
+        <span className="ml-auto w-4 flex justify-end">
+          {indicator ? (
+            <span
+              className={cn(
+                "w-1.5 h-1.5 rounded-full ring-1 ring-white/10 opacity-80",
+                indicator.className
+              )}
+              title={effectiveStatus?.kind}
+            />
+          ) : null}
+        </span>
       </div>
       {isFolder && isExpanded && file.children && (
         <div className="space-y-0.5">

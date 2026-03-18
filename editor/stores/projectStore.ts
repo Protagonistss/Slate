@@ -4,6 +4,7 @@ import { openProjectFolder, openProjectByPath } from '../services/project';
 import { setProjectDir, getCurrentProjectPath } from '../services/config';
 import { useConfigStore } from './configStore';
 import { useEditorStore } from './editorStore';
+import { useGitStatusStore } from './gitStatusStore';
 
 // Re-export types for convenience
 export type { ProjectInfo, ProjectFile } from '../services/project';
@@ -41,6 +42,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     // 关闭所有现有文件（为项目切换做准备）
     useEditorStore.getState().closeAllFiles();
+
+    // 刷新 Git 状态（用于文件树/Tab 装饰）
+    useGitStatusStore.getState().scheduleRefresh(project.path, 0);
   },
 
   openProject: async () => {

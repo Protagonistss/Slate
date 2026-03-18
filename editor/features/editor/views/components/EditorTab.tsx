@@ -9,7 +9,13 @@ interface EditorTabProps {
   onClose: () => void;
 }
 
-export function EditorTab({ name, isActive, isModified = false, onClick, onClose }: EditorTabProps) {
+export function EditorTab({
+  name,
+  isActive,
+  isModified = false,
+  onClick,
+  onClose,
+}: EditorTabProps) {
   return (
     <button
       onClick={onClick}

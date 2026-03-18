@@ -1,6 +1,7 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
 import type { editor } from 'monaco-editor';
 import * as monaco from 'monaco-editor';
+import { invoke } from '@tauri-apps/api/core';
 import './MonacoEditor.css';
 
 export interface MonacoEditorProps {
@@ -17,6 +18,9 @@ export interface MonacoEditorProps {
   minimap?: boolean;
   wordWrap?: editor.IEditorOptions['wordWrap'];
   lineNumbers?: editor.IEditorOptions['lineNumbers'];
+  projectPath?: string | null;
+  filePath?: string | null;
+  gitDiffRefreshSeq?: number;
 }
 
 export interface EditorSelection {
@@ -64,6 +68,9 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
       minimap = false,
       wordWrap = 'on',
       lineNumbers = 'on',
+      projectPath = null,
+      filePath = null,
+      gitDiffRefreshSeq = 0,
     },
     ref
   ) => {
@@ -72,6 +79,8 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
     const onChangeRef = useRef(onChange);
     const onSaveRef = useRef(onSave);
     const onCursorPositionChangeRef = useRef(onCursorPositionChange);
+    const decorationsRef = useRef<string[]>([]);
+    const diffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // 更新 refs
     useEffect(() => {
@@ -316,6 +325,84 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
         lineNumbers,
       });
     }, [fontSize, lineNumbers, minimap, readOnly, wordWrap]);
+
+    type GitDiffRange = {
+      kind: 'added' | 'modified' | 'deleted' | string;
+      startLine: number;
+      endLine: number;
+    };
+
+    const applyGitDiffDecorations = useCallback((ranges: GitDiffRange[]) => {
+      const ed = editorRef.current;
+      const model = ed?.getModel();
+      if (!ed || !model) return;
+
+      const newDecorations: editor.IModelDeltaDecoration[] = [];
+      for (const r of ranges) {
+        const start = Math.max(1, r.startLine);
+        const end = Math.max(start, r.endLine);
+
+        const kind = r.kind;
+        const isDeleted = kind === 'deleted';
+        const isAdded = kind === 'added';
+        const lineClass = isAdded
+          ? 'slateDiffLineAdded'
+          : isDeleted
+            ? 'slateDiffLineDeleted'
+            : 'slateDiffLineModified';
+        const gutterClass = isAdded
+          ? 'slateDiffGutterAdded'
+          : isDeleted
+            ? 'slateDiffGutterDeleted'
+            : 'slateDiffGutterModified';
+
+        newDecorations.push({
+          range: new monaco.Range(start, 1, end, 1),
+          options: {
+            isWholeLine: true,
+            className: lineClass,
+            linesDecorationsClassName: gutterClass,
+          },
+        });
+      }
+
+      decorationsRef.current = ed.deltaDecorations(decorationsRef.current, newDecorations);
+    }, []);
+
+    const refreshGitDiff = useCallback(async () => {
+      if (!projectPath || !filePath) {
+        applyGitDiffDecorations([]);
+        return;
+      }
+      try {
+        const ranges = await invoke<GitDiffRange[]>('get_git_diff_ranges', {
+          projectPath,
+          relativePath: filePath,
+        });
+        applyGitDiffDecorations(Array.isArray(ranges) ? ranges : []);
+      } catch {
+        // Git 不可用或非仓库时不显示 diff decorations
+        applyGitDiffDecorations([]);
+      }
+    }, [applyGitDiffDecorations, filePath, projectPath]);
+
+    // Debounced refresh on file/project/trigger changes
+    useEffect(() => {
+      if (diffTimerRef.current) {
+        clearTimeout(diffTimerRef.current);
+      }
+      diffTimerRef.current = setTimeout(() => {
+        diffTimerRef.current = null;
+        void refreshGitDiff();
+      }, 150);
+
+      return () => {
+        if (diffTimerRef.current) {
+          clearTimeout(diffTimerRef.current);
+          diffTimerRef.current = null;
+        }
+      };
+    }, [gitDiffRefreshSeq, projectPath, filePath, refreshGitDiff]);
 
     return (
       <div
