@@ -15,6 +15,9 @@ src-tauri/target/
 # Project runtime env (local override)
 .slate/env.json
 
+# Local subdir (do not track)
+Slate/
+
 # Logs
 logs/
 *.log
