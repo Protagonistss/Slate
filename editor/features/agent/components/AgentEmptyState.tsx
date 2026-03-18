@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { Layout, FileCode, Globe, Terminal, Bot, Plus, Settings, Play } from "lucide-react";
-import { AgentModelSelect } from "@/features/agent/components";
+import { AgentComposer } from "@/features/agent/components/AgentComposer";
 
 interface AgentEmptyStateProps {
   onStart: (goal: string) => void;
@@ -45,48 +45,52 @@ export function AgentEmptyState({ onStart }: AgentEmptyStateProps) {
         transition={{ delay: 0.1, duration: 0.4 }}
         className="mb-8 flex flex-col rounded-xl border border-graphite bg-charcoal shadow-sm transition-all focus-within:border-zinc-600 focus-within:ring-1 focus-within:ring-zinc-600/20"
       >
-        <textarea
+        <AgentComposer
           value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="What do you want to build today?"
-          className="min-h-[120px] w-full resize-none bg-transparent p-4 pb-0 text-[15px] leading-relaxed text-zinc-200 placeholder-zinc-600 focus:outline-none"
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && input.trim()) {
-              event.preventDefault();
-              onStart(input.trim());
+          onChange={(next) => setInput(next)}
+          onSubmit={() => {
+            if (!canInitialize) {
+              return;
             }
+            onStart(input.trim());
           }}
-        />
-        <div className="flex items-center justify-between p-3">
-          <div className="flex items-center gap-1 text-zinc-500">
-            <button className="rounded-lg p-2 transition-colors hover:bg-white/5 hover:text-zinc-300" title="Add context">
-              <Plus size={16} />
-            </button>
-            <button className="rounded-lg p-2 transition-colors hover:bg-white/5 hover:text-zinc-300" title="Settings">
-              <Settings size={16} />
-            </button>
-          </div>
-          <div className="flex items-center gap-3">
-            <AgentModelSelect className="mr-2" />
+          placeholder="What do you want to build today?"
+          primaryLabel={
+            <>
+              <Play size={14} fill="currentColor" />
+              Initialize
+            </>
+          }
+          canSubmit={canInitialize}
+          showModelSelect
+          modelSelectClassName="mr-2"
+          leftSlot={
+            <>
+              <button
+                type="button"
+                className="rounded-lg p-2 transition-colors hover:bg-white/5 hover:text-zinc-300"
+                title="Add context"
+              >
+                <Plus size={16} />
+              </button>
+              <button
+                type="button"
+                className="rounded-lg p-2 transition-colors hover:bg-white/5 hover:text-zinc-300"
+                title="Settings"
+              >
+                <Settings size={16} />
+              </button>
+            </>
+          }
+          hintSlot={
             <div className="hidden items-center gap-1.5 text-[11px] font-medium text-zinc-500 sm:flex">
               <span>Press</span>
               <kbd className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 font-sans">Enter</kbd>
             </div>
-            <button
-              onClick={() => {
-                if (!canInitialize) {
-                  return;
-                }
-                onStart(input.trim());
-              }}
-              disabled={!canInitialize}
-              className="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3.5 py-1.5 text-[13px] font-semibold text-zinc-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Play size={14} fill="currentColor" />
-              Initialize
-            </button>
-          </div>
-        </div>
+          }
+          containerClassName="rounded-none border-0 shadow-none bg-transparent focus-within:bg-transparent"
+          textareaClassName="min-h-[120px] p-4 pb-0 text-[15px] leading-relaxed text-zinc-200"
+        />
       </motion.div>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.4 }}>

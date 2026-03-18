@@ -9,6 +9,9 @@ export type { ReasoningBlock } from './ReasoningContent';
 export { AgentControls } from './AgentControls';
 export type { AgentControlsProps } from './AgentControls';
 
+export { AgentComposer } from './AgentComposer';
+export type { AgentComposerProps, AgentComposerVariant } from './AgentComposer';
+
 export { AgentStepList } from './AgentStepList';
 export type { DisplayStep, AgentStepListProps } from './AgentStepList';
 

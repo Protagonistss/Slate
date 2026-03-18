@@ -3,14 +3,13 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { matchPath, useLocation, useNavigate, useParams } from "react-router";
 import { Bot, Play, Plus, ChevronDown, CornerLeftUp, Square, User } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   AgentEmptyState,
   AgentStepList,
-  AgentModelSelect,
   TimelineCodeBlock,
   TimelineNode,
 } from "@/features/agent/components";
+import { AgentComposer } from "@/features/agent/components/AgentComposer";
 import {
   TimelineReasoningNode,
   TimelineToolCallNode,
@@ -219,13 +218,6 @@ export function AgentView() {
     <User size={12} />
   );
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey && state.goalDraft.trim()) {
-      event.preventDefault();
-      handlers.handlePrimaryAction();
-    }
-  };
-
   return (
     <div className="flex h-full flex-1 flex-col w-full mx-auto overflow-hidden bg-obsidian">
       <div className="flex-1 p-4 lg:p-6 pb-2 flex flex-col space-y-6 min-h-0">
@@ -350,23 +342,37 @@ export function AgentView() {
       </div>
 
       <div className="shrink-0 py-3 px-4 lg:py-4 lg:px-6 border-t border-zinc-800/50 bg-[#0a0a0a]/90 backdrop-blur-md z-10 w-full relative">
-        <div className="rounded-xl bg-charcoal border border-graphite relative group focus-within:border-zinc-700 focus-within:bg-zinc-900/50 transition-colors flex flex-col shadow-lg max-w-5xl mx-auto">
-          <textarea
-            ref={state.goalInputRef}
-            className="w-full bg-transparent border-none focus:outline-none text-[14px] text-zinc-300 placeholder-zinc-600 resize-none font-normal leading-[1.5] min-h-[24px] px-3 pt-2.5 pb-0"
-            value={state.goalDraft}
-            onChange={(e) => {
-              state.setGoalDraft(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = e.target.scrollHeight + "px";
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="Refine your request or add new instructions..."
-            rows={1}
-          />
-
-          <div className="flex items-center justify-between p-1.5">
-            <div className="flex items-center gap-1.5 pl-1 text-zinc-500">
+        <AgentComposer
+          value={state.goalDraft}
+          textareaRef={state.goalInputRef}
+          onChange={(next, el) => {
+            state.setGoalDraft(next);
+            if (el) {
+              el.style.height = "auto";
+              el.style.height = el.scrollHeight + "px";
+            }
+          }}
+          onSubmit={handlers.handlePrimaryAction}
+          primaryVariant={state.isProcessing ? "danger" : "primary"}
+          primaryLabel={
+            state.isProcessing ? (
+              <>
+                <Square size={12} className="fill-current" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Play size={12} fill="currentColor" />
+                {calculations.canResumeCurrentRun ? "Continue" : "Run"}
+              </>
+            )
+          }
+          canSubmit={state.isProcessing || Boolean(state.goalDraft.trim()) || calculations.canResumeCurrentRun}
+          showModelSelect
+          modelSelectDisabled={state.isProcessing}
+          containerClassName="max-w-5xl mx-auto"
+          leftSlot={
+            <>
               <button
                 type="button"
                 className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
@@ -384,45 +390,17 @@ export function AgentView() {
                   <ChevronDown size={12} className="opacity-50 group-hover/mode:opacity-100 transition-opacity" />
                 </button>
               </div>
+            </>
+          }
+          hintSlot={
+            <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-zinc-500">
+              <span>Press</span>
+              <kbd className="px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800/50 flex items-center justify-center">
+                <CornerLeftUp size={10} className="rotate-90" />
+              </kbd>
             </div>
-
-            <div className="flex items-center gap-3 pr-1">
-              <AgentModelSelect className="hidden sm:block mr-2" disabled={state.isProcessing} />
-
-              <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-zinc-500">
-                <span>Press</span>
-                <kbd className="px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800/50 flex items-center justify-center">
-                  <CornerLeftUp size={10} className="rotate-90" />
-                </kbd>
-              </div>
-
-              <button
-                onClick={handlers.handlePrimaryAction}
-                disabled={!state.isProcessing && !state.goalDraft.trim() && !calculations.canResumeCurrentRun}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 font-medium text-[12px]",
-                  state.isProcessing
-                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
-                    : state.goalDraft.trim() || calculations.canResumeCurrentRun
-                      ? "bg-zinc-300 text-zinc-900 hover:bg-white"
-                      : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                )}
-              >
-                {state.isProcessing ? (
-                  <>
-                    <Square size={12} className="fill-current" />
-                    Stop
-                  </>
-                ) : (
-                  <>
-                    <Play size={12} fill="currentColor" />
-                    {calculations.canResumeCurrentRun ? "Continue" : "Run"}
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+          }
+        />
       </div>
     </div>
   );
