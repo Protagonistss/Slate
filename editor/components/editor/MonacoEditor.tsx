@@ -233,8 +233,8 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
         hideCursorInOverviewRuler: true,
         glyphMargin: false,
         folding: false,
-        lineDecorationsWidth: 0,
-        lineNumbersMinChars: 2,
+        lineDecorationsWidth: 16,
+        lineNumbersMinChars: 3,
         renderLineHighlightOnlyWhenFocus: false,
         bracketPairColorization: { enabled: false },
         guides: {

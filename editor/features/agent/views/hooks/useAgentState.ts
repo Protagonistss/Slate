@@ -40,6 +40,7 @@ export function useAgentState() {
   const {
     isProcessing,
     currentStreamContent,
+    currentToolCalls,
     currentRun,
     error,
     sendMessage,
@@ -80,6 +81,7 @@ export function useAgentState() {
     // Agent hook values
     isProcessing,
     currentStreamContent,
+    currentToolCalls,
     currentRun,
     error,
     sendMessage,
