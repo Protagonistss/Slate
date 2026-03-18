@@ -13,6 +13,10 @@ import type {
 } from '@/features/agent/store/types';
 import type { AgentStep } from '@/features/agent/store/types';
 
+function normalizeReasoningValue(value: string): string {
+  return value.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Creates a new artifact reference
  */
@@ -70,6 +74,16 @@ export function addReasoningEntry(
 ): AgentRun {
   const nextText = text.trim();
   if (!nextText) {
+    return run;
+  }
+
+  const normalizedNextText = normalizeReasoningValue(nextText);
+  const previousEntry = run.reasoningEntries[run.reasoningEntries.length - 1];
+  if (
+    previousEntry &&
+    previousEntry.stepId === (stepId ?? null) &&
+    normalizeReasoningValue(previousEntry.text) === normalizedNextText
+  ) {
     return run;
   }
 

@@ -10,6 +10,7 @@ interface AgentEmptyStateProps {
 
 export function AgentEmptyState({ onStart }: AgentEmptyStateProps) {
   const [input, setInput] = useState("");
+  const canInitialize = input.trim().length > 0;
   const suggestions = [
     { icon: <Layout size={16} />, text: "Build a complete authentication flow with Next.js and Supabase" },
     { icon: <FileCode size={16} />, text: "Create a Kanban board application using React and Tailwind" },
@@ -72,8 +73,13 @@ export function AgentEmptyState({ onStart }: AgentEmptyStateProps) {
               <kbd className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 font-sans">Enter</kbd>
             </div>
             <button
-              onClick={() => input.trim() && onStart(input.trim())}
-              disabled={!input.trim()}
+              onClick={() => {
+                if (!canInitialize) {
+                  return;
+                }
+                onStart(input.trim());
+              }}
+              disabled={!canInitialize}
               className="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3.5 py-1.5 text-[13px] font-semibold text-zinc-900 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Play size={14} fill="currentColor" />

@@ -1,12 +1,15 @@
 // AgentView - 主视图组件（已重构，还原原型时间线布局）
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Bot, Play, Plus, ChevronDown, CornerLeftUp } from "lucide-react";
+import { matchPath, useLocation, useNavigate, useParams } from "react-router";
+import { Bot, Play, Plus, ChevronDown, CornerLeftUp, Square, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   AgentEmptyState,
   AgentStepList,
   AgentModelSelect,
+  TimelineCodeBlock,
+  TimelineNode,
 } from "@/features/agent/components";
 import {
   TimelineReasoningNode,
@@ -17,10 +20,69 @@ import {
 } from "@/features/agent/components";
 import type { DisplayStep, ArtifactSection } from "@/features/agent/components";
 import type { ToolCallRecord } from "@/features/agent/store/types";
+import { useAuthStore, useConversationStore } from "@/stores";
 import { useAgentState, useAgentCalculations, useAgentEffects, useAgentHandlers } from "./hooks";
 
 export function AgentView() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { conversationId: routeConversationIdParam } = useParams<{ conversationId?: string }>();
+  const routeConversationIdFromPath =
+    matchPath("/agent/:conversationId", location.pathname)?.params?.conversationId ?? null;
+  const runtimePathname =
+    typeof window !== "undefined" ? window.location.pathname : "";
+  const routeConversationIdFromRuntimePath =
+    matchPath("/agent/:conversationId", runtimePathname)?.params?.conversationId ?? null;
+  const routeConversationId =
+    routeConversationIdParam ??
+    routeConversationIdFromPath ??
+    routeConversationIdFromRuntimePath ??
+    undefined;
+  const authUser = useAuthStore((state) => state.user);
+  const currentConversationId = useConversationStore((state) => state.currentConversationId);
+  const routeConversationExists = useConversationStore((state) =>
+    routeConversationId ? state.conversations.some((conversation) => conversation.id === routeConversationId) : false
+  );
+  const currentConversationExists = useConversationStore((state) =>
+    currentConversationId ? state.conversations.some((conversation) => conversation.id === currentConversationId) : false
+  );
+  const setCurrentConversation = useConversationStore((state) => state.setCurrentConversation);
   const state = useAgentState();
+  const [historyAvatarFailed, setHistoryAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    if (!routeConversationId) {
+      // Keep current conversation id untouched on `/agent` to avoid
+      // racing with "create -> navigate" flow and accidentally clearing it.
+      return;
+    }
+
+    if (!routeConversationExists) {
+      if (currentConversationId && currentConversationExists) {
+        navigate(`/agent/${currentConversationId}`, { replace: true });
+        return;
+      }
+
+      setCurrentConversation(null);
+      navigate("/agent", { replace: true });
+      return;
+    }
+
+    if (routeConversationId !== currentConversationId) {
+      setCurrentConversation(routeConversationId);
+    }
+  }, [
+    currentConversationExists,
+    currentConversationId,
+    navigate,
+    routeConversationExists,
+    routeConversationId,
+    setCurrentConversation,
+  ]);
+
+  useEffect(() => {
+    setHistoryAvatarFailed(false);
+  }, [authUser?.avatarUrl]);
 
   const calculations = useAgentCalculations({
     currentRun: state.currentRun,
@@ -31,6 +93,7 @@ export function AgentView() {
     catalogProviders: state.catalogProviders,
     accessToken: state.accessToken,
     isProcessing: state.isProcessing,
+    currentToolCalls: state.currentToolCalls || [],
     error: state.error,
     expandedFile: state.expandedFile,
   });
@@ -73,6 +136,7 @@ export function AgentView() {
     goalInputRef: state.goalInputRef,
     isProcessing: state.isProcessing,
     currentRun: state.currentRun,
+    routeConversationId,
     canResumeCurrentRun: calculations.canResumeCurrentRun,
     accessToken: state.accessToken,
     catalogLoading: state.catalogLoading,
@@ -89,18 +153,71 @@ export function AgentView() {
   });
 
   const [expandedToolCall, setExpandedToolCall] = useState<string | null>(null);
+  const [expandedHistoryMessage, setExpandedHistoryMessage] = useState<string | null>(null);
+  const [expandedReasoningId, setExpandedReasoningId] = useState<string | null>(null);
+  // Enter detail view whenever route has conversation id.
+  // A fresh conversation may not have run/messages yet, but should still
+  // render the secondary page instead of falling back to empty state.
+  const shouldShowEmptyState = !routeConversationId;
 
-  if (!calculations.hasSession) {
+  if (shouldShowEmptyState) {
     return (
       <div className="flex h-full flex-1 flex-col justify-center space-y-8 overflow-y-auto p-4 pb-24 scrollbar-thin scrollbar-thumb-zinc-800 lg:p-6">
-        <AgentEmptyState onStart={(goal) => void handlers.handleRun(goal)} />
+        <AgentEmptyState 
+          onStart={(goal) => {
+            void handlers.handleRun(goal);
+          }} 
+        />
       </div>
     );
   }
 
   const hasStreamContent = state.currentStreamContent.trim().length > 0;
-  const toolCalls = state.currentToolCalls || [];
   const artifactSections = calculations.artifactSections || [];
+  const historyMessages = calculations.visibleMessages.flatMap((message, index) => {
+      if (message.role !== "user") {
+        return [];
+      }
+
+      const textContent = typeof message.content === "string"
+        ? message.content.trim()
+        : message.content
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("\n\n")
+            .trim();
+
+      if (!textContent) {
+        return [];
+      }
+
+      return [{
+        id: `history-${index}`,
+        role: message.role,
+        content: textContent,
+      }];
+    }).filter((message, index, list) => {
+      if (index === 0) {
+        return true;
+      }
+
+      const previous = list[index - 1];
+      return previous.role !== message.role || previous.content !== message.content;
+    });
+
+  const userInitial = authUser?.username.trim().charAt(0).toUpperCase() || "";
+  const userHistoryIcon = authUser?.avatarUrl && !historyAvatarFailed ? (
+    <img
+      src={authUser.avatarUrl}
+      alt={authUser.username || "User avatar"}
+      className="h-full w-full rounded-full object-cover"
+      onError={() => setHistoryAvatarFailed(true)}
+    />
+  ) : authUser ? (
+    <span className="text-[10px] font-semibold text-zinc-100">{userInitial}</span>
+  ) : (
+    <User size={12} />
+  );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && state.goalDraft.trim()) {
@@ -130,28 +247,54 @@ export function AgentView() {
           <div className="lg:col-span-3 flex flex-col h-full min-h-0">
             <div className="flex flex-col h-full min-h-0 pl-2 lg:pl-6 text-zinc-300 font-sans">
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800/50 pr-4 pb-12 pt-2">
-                <TimelineReasoningNode
-                  entry={calculations.latestReasoning}
-                  isExpanded={state.isReasoningExpanded}
-                  onToggle={() => state.setIsReasoningExpanded((v) => !v)}
-                />
-
-                {toolCalls.map((toolCall: ToolCallRecord) => (
-                  <TimelineToolCallNode
-                    key={toolCall.id}
-                    toolCall={toolCall}
-                    isExpanded={expandedToolCall === toolCall.id}
+                {historyMessages.map((message) => (
+                  <TimelineNode
+                    key={message.id}
+                    icon={message.role === "user" ? userHistoryIcon : <Bot size={12} />}
+                    iconBg={message.role === "user" ? "bg-blue-950/40" : "bg-emerald-950/40"}
+                    iconBorder={message.role === "user" ? "border-blue-900/80" : "border-emerald-900/80"}
+                    label={message.role === "user" ? "You" : "Assistant"}
+                    preview={message.content}
+                    isExpanded={expandedHistoryMessage === message.id}
                     onToggle={() =>
-                      setExpandedToolCall(expandedToolCall === toolCall.id ? null : toolCall.id)
+                      setExpandedHistoryMessage(expandedHistoryMessage === message.id ? null : message.id)
                     }
-                    onConfirm={() => {
-                      state.resumeRun();
-                    }}
-                    onReject={() => {
-                      state.stopGeneration();
-                    }}
-                  />
+                  >
+                    <TimelineCodeBlock>
+                      <pre className="whitespace-pre-wrap break-words font-sans text-zinc-300">
+                        {message.content}
+                      </pre>
+                    </TimelineCodeBlock>
+                  </TimelineNode>
                 ))}
+
+                {calculations.processTimelineItems.map((item) =>
+                  item.type === "reasoning" ? (
+                    <TimelineReasoningNode
+                      key={item.id}
+                      entry={item.entry}
+                      isExpanded={expandedReasoningId === item.entry.id}
+                      onToggle={() =>
+                        setExpandedReasoningId(expandedReasoningId === item.entry.id ? null : item.entry.id)
+                      }
+                    />
+                  ) : (
+                    <TimelineToolCallNode
+                      key={item.id}
+                      toolCall={item.toolCall}
+                      isExpanded={expandedToolCall === item.toolCall.id}
+                      onToggle={() =>
+                        setExpandedToolCall(expandedToolCall === item.toolCall.id ? null : item.toolCall.id)
+                      }
+                      onConfirm={() => {
+                        state.resumeRun();
+                      }}
+                      onReject={() => {
+                        state.stopGeneration();
+                      }}
+                    />
+                  )
+                )}
 
                 {artifactSections.slice(0, -1).map((section: ArtifactSection) => (
                   <TimelineFileNode
@@ -178,6 +321,27 @@ export function AgentView() {
 
                 {calculations.hasPendingSteps && (
                   <TimelinePendingNode path="Next task awaiting..." />
+                )}
+
+                {calculations.finalAssistantSummary && (
+                  <TimelineNode
+                    icon={<Bot size={12} />}
+                    iconBg="bg-emerald-950/40"
+                    iconBorder="border-emerald-900/80"
+                    label="Final Summary"
+                    preview={calculations.finalAssistantSummary}
+                    isExpanded={expandedHistoryMessage === "assistant-summary"}
+                    onToggle={() =>
+                      setExpandedHistoryMessage(expandedHistoryMessage === "assistant-summary" ? null : "assistant-summary")
+                    }
+                    isLast
+                  >
+                    <TimelineCodeBlock>
+                      <pre className="whitespace-pre-wrap break-words font-sans text-zinc-300">
+                        {calculations.finalAssistantSummary}
+                      </pre>
+                    </TimelineCodeBlock>
+                  </TimelineNode>
                 )}
               </div>
             </div>
@@ -234,16 +398,27 @@ export function AgentView() {
 
               <button
                 onClick={handlers.handlePrimaryAction}
-                disabled={!state.goalDraft.trim() && !calculations.canResumeCurrentRun}
+                disabled={!state.isProcessing && !state.goalDraft.trim() && !calculations.canResumeCurrentRun}
                 className={cn(
                   "px-3 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 font-medium text-[12px]",
-                  state.goalDraft.trim() || calculations.canResumeCurrentRun
-                    ? "bg-zinc-300 text-zinc-900 hover:bg-white"
-                    : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                  state.isProcessing
+                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+                    : state.goalDraft.trim() || calculations.canResumeCurrentRun
+                      ? "bg-zinc-300 text-zinc-900 hover:bg-white"
+                      : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
                 )}
               >
-                <Play size={12} fill="currentColor" />
-                {calculations.canResumeCurrentRun ? "Continue" : "Run"}
+                {state.isProcessing ? (
+                  <>
+                    <Square size={12} className="fill-current" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Play size={12} fill="currentColor" />
+                    {calculations.canResumeCurrentRun ? "Continue" : "Run"}
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -91,11 +91,11 @@ export function createExecutionRuntimeTools(): ToolDefinition[] {
     },
     {
       name: INTERNAL_AGENT_TOOL_NAMES.appendReasoning,
-      description: 'Append a concise reasoning note for the run.',
+      description: 'Append a concise in-progress reasoning note for the run. Do not use this for final summaries or output recaps.',
       input_schema: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: 'Short reasoning note.' },
+          text: { type: 'string', description: 'Short in-progress reasoning note, not a final summary or markdown recap.' },
           phase: {
             type: 'string',
             enum: ['planning', 'execution', 'tool'],

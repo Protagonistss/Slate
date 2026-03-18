@@ -93,7 +93,10 @@ def format_messages_for_openai(messages: list[ChatMessage]) -> list[dict[str, An
 
     for message in messages:
         if isinstance(message.content, str):
-            formatted.append({"role": message.role, "content": message.content})
+            content = message.content.strip()
+            if not content:
+                continue
+            formatted.append({"role": message.role, "content": content})
             continue
 
         text_blocks = [block for block in message.content if block.type == "text"]
@@ -105,7 +108,7 @@ def format_messages_for_openai(messages: list[ChatMessage]) -> list[dict[str, An
             formatted.append(
                 {
                     "role": "assistant",
-                    "content": "".join(block.text for block in text_blocks) or None,
+                    "content": "".join(block.text for block in text_blocks).strip(),
                     "tool_calls": [
                         {
                             "id": block.id,
@@ -122,7 +125,7 @@ def format_messages_for_openai(messages: list[ChatMessage]) -> list[dict[str, An
             continue
 
         if message.role == "user" and tool_result_blocks:
-            text_content = "".join(block.text for block in text_blocks)
+            text_content = "".join(block.text for block in text_blocks).strip()
             if text_content:
                 formatted.append({"role": "user", "content": text_content})
             for block in tool_result_blocks:
@@ -165,12 +168,14 @@ def format_messages_for_openai(messages: list[ChatMessage]) -> list[dict[str, An
             )
             continue
 
-        formatted.append(
-            {
-                "role": message.role,
-                "content": "".join(block.text for block in text_blocks),
-            }
-        )
+        text_content = "".join(block.text for block in text_blocks).strip()
+        if text_content:
+            formatted.append(
+                {
+                    "role": message.role,
+                    "content": text_content,
+                }
+            )
 
     return formatted
 
@@ -198,6 +203,24 @@ def _safe_json_loads(raw: str) -> dict[str, Any]:
         return json.loads(raw)
     except json.JSONDecodeError:
         return {}
+
+
+def _extract_upstream_error_message(raw: str) -> str:
+    payload = _safe_json_loads(raw)
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
+        detail = payload.get("detail")
+        if isinstance(detail, str) and detail.strip():
+            return detail.strip()
+        message = payload.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+
+    return raw.strip()
 
 
 def resolve_usage_conversation_id(
@@ -267,7 +290,7 @@ async def stream_chat_completion(
                 if response.status_code >= 400:
                     message = (await response.aread()).decode("utf-8", errors="ignore")
                     usage_log.status = "error"
-                    usage_log.error = message or "上游模型调用失败"
+                    usage_log.error = _extract_upstream_error_message(message) or "上游模型调用失败"
                     usage_log.completed_at = utcnow()
                     db.add(usage_log)
                     db.commit()

@@ -49,6 +49,86 @@ export function appendSystemPrompt(messages: Message[], systemPrompt?: string): 
 }
 
 /**
+ * Sanitizes chat messages before sending them to the LLM gateway.
+ */
+export function sanitizeMessagesForLLM(messages: Message[], fallbackUserText?: string): Message[] {
+  const sanitized: Message[] = [];
+
+  for (const message of messages) {
+    if (typeof message.content === 'string') {
+      const nextContent = message.content.trim();
+      if (!nextContent) {
+        continue;
+      }
+
+      sanitized.push({
+        ...message,
+        content: nextContent,
+      });
+      continue;
+    }
+
+    if (!Array.isArray(message.content) || message.content.length === 0) {
+      continue;
+    }
+
+    const nextBlocks = message.content.filter((block) => {
+      switch (block.type) {
+        case 'text':
+          return Boolean(block.text.trim());
+        case 'image':
+          return Boolean(block.source?.data?.trim());
+        case 'tool_use':
+          return Boolean(block.id.trim() && block.name.trim());
+        case 'tool_result':
+          return Boolean(block.tool_use_id.trim() && block.content.trim());
+        default:
+          return false;
+      }
+    });
+
+    if (nextBlocks.length === 0) {
+      continue;
+    }
+
+    if (message.role === 'system') {
+      const nextContent = nextBlocks
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text.trim())
+        .filter(Boolean)
+        .join('\n\n');
+
+      if (!nextContent) {
+        continue;
+      }
+
+      sanitized.push({
+        role: 'system',
+        content: nextContent,
+      });
+      continue;
+    }
+
+    sanitized.push({
+      ...message,
+      content: nextBlocks,
+    });
+  }
+
+  const hasUserMessage = sanitized.some((message) => message.role === 'user');
+  const nextFallback = fallbackUserText?.trim();
+
+  if (!hasUserMessage && nextFallback) {
+    sanitized.push({
+      role: 'user',
+      content: nextFallback,
+    });
+  }
+
+  return sanitized;
+}
+
+/**
  * Builds workspace summary string for context
  */
 export function buildWorkspaceSummary(context: MessageContext): string {
@@ -105,7 +185,8 @@ export function buildExecutionSystemPrompt(
     `Goal: ${run.goal}`,
     'Execution rules:',
     `1. Before work starts on a step, call "${INTERNAL_AGENT_TOOL_NAMES.updateStepStatus}" with status="running".`,
-    `2. Use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" for concise execution notes.`,
+    `2. Use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" only for short in-progress notes about the next action or decision.`,
+    `   Do not use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" for final summaries, markdown reports, bullet-list recaps, or repeating file/tool output.`,
     `3. Use "${INTERNAL_AGENT_TOOL_NAMES.appendStepSummary}" whenever you have a meaningful result for a step.`,
     `4. Use "${INTERNAL_AGENT_TOOL_NAMES.attachArtifact}" for files, plans, or tool outputs worth showing in Live Artifacts.`,
     `5. When a step completes, call "${INTERNAL_AGENT_TOOL_NAMES.updateStepStatus}" with status="completed".`,

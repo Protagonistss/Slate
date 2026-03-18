@@ -5,6 +5,7 @@ import type { MessageContext, StoreGetter, StoreSetter } from '../types';
 import {
   appendSystemPrompt,
   buildExecutionSystemPrompt,
+  sanitizeMessagesForLLM,
 } from '../internal/utils';
 import { now } from '@/utils/date';
 import { createExecutionRuntimeTools } from '../internal/tools';
@@ -36,14 +37,22 @@ export async function runExecutionLoop(
   }));
 
   while (!abortController.signal.aborted) {
+    set((state: import('@/features/agent/store/types').AgentState) => ({
+      runsByConversation: updateRunState({ runsByConversation: state.runsByConversation }, context.conversationId, (runState) =>
+        ensureRunnableStep(runState)
+      ),
+    }));
     const run = get().runsByConversation[context.conversationId];
     if (!run) {
       break;
     }
 
-    const executionMessages = appendSystemPrompt(
-      getConversationMessages(context.conversationId),
-      buildExecutionSystemPrompt(context.systemPrompt, context, run)
+    const executionMessages = sanitizeMessagesForLLM(
+      appendSystemPrompt(
+        getConversationMessages(context.conversationId),
+        buildExecutionSystemPrompt(context.systemPrompt, context, run)
+      ),
+      run.goal
     );
     const assistantMessageIndex = createAssistantMessage(context.conversationId);
     const accumulator: AssistantAccumulator = {

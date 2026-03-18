@@ -53,6 +53,10 @@ function derivePersistedRunPhase(run: AgentRun): AgentRunPhase {
   }
 
   if (run.steps.length === 0) {
+    if (run.phase === 'completed' && run.lastAssistantMessage.trim()) {
+      return 'completed';
+    }
+
     return 'paused';
   }
 

@@ -5,23 +5,26 @@ import { useAgentStore, useConversationStore, useUIStore } from '@/stores';
  * Agent 操作 Hook
  */
 export function useAgent() {
-  const {
-    status,
-    isProcessing,
-    currentStreamContent,
-    currentToolCalls,
-    runsByConversation,
-    error,
-    sendMessage,
-    resumeRun,
-    retryStep,
-    stopGeneration,
-    clearError,
-    reset,
-  } = useAgentStore();
+  const status = useAgentStore((state) => state.status);
+  const isProcessing = useAgentStore((state) => state.isProcessing);
+  const currentStreamContent = useAgentStore((state) => state.currentStreamContent);
+  const currentToolCalls = useAgentStore((state) => state.currentToolCalls);
+  const runsByConversation = useAgentStore((state) => state.runsByConversation);
+  const error = useAgentStore((state) => state.error);
+  const sendMessage = useAgentStore((state) => state.sendMessage);
+  const resumeRun = useAgentStore((state) => state.resumeRun);
+  const retryStep = useAgentStore((state) => state.retryStep);
+  const stopGeneration = useAgentStore((state) => state.stopGeneration);
+  const clearError = useAgentStore((state) => state.clearError);
+  const reset = useAgentStore((state) => state.reset);
+
   const currentConversationId = useConversationStore((state) => state.currentConversationId);
 
   const { addToast } = useUIStore();
+
+  console.log('[useAgent] currentConversationId:', currentConversationId);
+  console.log('[useAgent] runsByConversation keys:', Object.keys(runsByConversation));
+
   const currentRun = currentConversationId ? runsByConversation[currentConversationId] || null : null;
 
   const send = useCallback(

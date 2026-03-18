@@ -4,15 +4,17 @@ import { toolRegistry } from '../../tools';
 import type { ToolResultContentBlock, ToolUseContentBlock } from '../../llm/types';
 import type { ToolResult } from '../../tools';
 import type { MessageContext, StoreGetter, StoreSetter } from '../types';
-import { INTERNAL_AGENT_TOOL_SET } from '../internal/tools';
+import { INTERNAL_AGENT_TOOL_NAMES, INTERNAL_AGENT_TOOL_SET } from '../internal/tools';
 import { serializeToolResult, sanitizePathSegment } from '../internal/utils';
 import {
+  addReasoningEntry,
   appendStepEvidence,
+  appendStepSummary,
   attachArtifactToRun,
   setStepStatus,
   updateRunState,
 } from '../run/runOperations';
-import type { AgentRun } from '@/features/agent/store/types';
+import type { AgentRun, AgentReasoningPhase, AgentStepStatus, ArtifactKind } from '@/features/agent/store/types';
 import type { ToolCallRecord } from '@/features/agent/store/types';
 import { now } from '@/utils/date';
 import { useConversationStore } from '@/stores/conversationStore';
@@ -77,6 +79,11 @@ export async function executeToolUses(
     });
 
     if (isRuntimeTool) {
+      setState((state: import('@/features/agent/store/types').AgentState) => ({
+        runsByConversation: updateRunState({ runsByConversation: state.runsByConversation }, conversationId, (run) => {
+          return applyInternalTool(run, toolUse);
+        }),
+      }));
       continue;
     }
 
@@ -128,5 +135,73 @@ export async function executeToolUses(
           : nextRun;
       }),
     }));
+  }
+}
+
+function applyInternalTool(run: AgentRun, toolUse: ToolUseContentBlock): AgentRun {
+  const input = toolUse.input || {};
+  const stepId = typeof input.step_id === 'string' ? input.step_id : undefined;
+
+  switch (toolUse.name) {
+    case INTERNAL_AGENT_TOOL_NAMES.updateStepStatus: {
+      const status = typeof input.status === 'string' ? (input.status as AgentStepStatus) : null;
+      const summary = typeof input.summary === 'string' ? input.summary : undefined;
+
+      if (!stepId || !status) {
+        return run;
+      }
+
+      const nextRun = setStepStatus(run, stepId, status, summary);
+      if (status !== 'running') {
+        return nextRun;
+      }
+
+      const targetStep = nextRun.steps.find((step) => step.id === stepId);
+      if (!targetStep) {
+        return nextRun;
+      }
+
+      return addReasoningEntry(nextRun, 'execution', `Working on ${targetStep.title}...`, stepId);
+    }
+
+    case INTERNAL_AGENT_TOOL_NAMES.appendStepSummary: {
+      const summary = typeof input.summary === 'string' ? input.summary : '';
+      if (!stepId || !summary.trim()) {
+        return run;
+      }
+
+      return appendStepSummary(run, stepId, summary);
+    }
+
+    case INTERNAL_AGENT_TOOL_NAMES.attachArtifact: {
+      const kind = typeof input.kind === 'string' ? (input.kind as ArtifactKind) : null;
+      const path = typeof input.path === 'string' ? input.path : '';
+      const title = typeof input.title === 'string' ? input.title : undefined;
+      const preview = typeof input.preview === 'string' ? input.preview : undefined;
+
+      if (!kind || !path) {
+        return run;
+      }
+
+      return attachArtifactToRun(run, { stepId, path, kind, title, preview });
+    }
+
+    case INTERNAL_AGENT_TOOL_NAMES.appendReasoning: {
+      const text = typeof input.text === 'string' ? input.text : '';
+      const phaseStr = typeof input.phase === 'string' ? input.phase : 'execution';
+      const validPhases: AgentReasoningPhase[] = ['planning', 'execution', 'tool'];
+      const phase: AgentReasoningPhase = validPhases.includes(phaseStr as AgentReasoningPhase)
+        ? (phaseStr as AgentReasoningPhase)
+        : 'execution';
+
+      if (!text.trim()) {
+        return run;
+      }
+
+      return addReasoningEntry(run, phase, text, stepId);
+    }
+
+    default:
+      return run;
   }
 }

@@ -76,7 +76,7 @@ export interface AgentRunFile {
 
 export interface StoredMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: Message['content'];
   timestamp: number;
 }
 
@@ -102,6 +102,7 @@ export interface SessionStorageInterface {
   deleteSession(id: string): Promise<void>;
   
   appendMessage(sessionId: string, message: StoredMessage): Promise<void>;
+  replaceMessages(sessionId: string, messages: StoredMessage[]): Promise<void>;
   getMessages(sessionId: string): Promise<StoredMessage[]>;
   
   saveAgentRun(sessionId: string, run: AgentRunFile): Promise<void>;

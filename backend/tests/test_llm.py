@@ -117,6 +117,57 @@ def test_format_messages_for_openai_supports_tool_results_and_images() -> None:
     }
 
 
+def test_format_messages_for_openai_drops_empty_messages_and_uses_empty_string_for_tool_calls() -> None:
+    (
+        llm,
+        ChatMessage,
+        _ImageContentBlock,
+        _ImageSource,
+        _TextContentBlock,
+        _ToolResultContentBlock,
+        ToolUseContentBlock,
+    ) = _load_llm_dependencies()
+
+    messages = [
+        ChatMessage(role="system", content="   "),
+        ChatMessage(
+            role="assistant",
+            content=[
+                ToolUseContentBlock(
+                    type="tool_use",
+                    id="tool_1",
+                    name="list_files",
+                    input={},
+                ),
+            ],
+        ),
+        ChatMessage(role="user", content="  继续  "),
+    ]
+
+    formatted = llm.format_messages_for_openai(messages)
+
+    assert formatted == [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "tool_1",
+                    "type": "function",
+                    "function": {
+                        "name": "list_files",
+                        "arguments": "{}",
+                    },
+                }
+            ],
+        },
+        {
+            "role": "user",
+            "content": "继续",
+        },
+    ]
+
+
 def test_resolve_provider_prefers_explicit_configured_provider() -> None:
     llm, *_ = _load_llm_dependencies()
 

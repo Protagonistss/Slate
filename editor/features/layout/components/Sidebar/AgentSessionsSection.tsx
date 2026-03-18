@@ -1,5 +1,5 @@
 // AgentSessionsSection - Agent 会话列表组件
-import { useNavigate } from "react-router";
+import { useParams } from "react-router";
 import { useAgentStore, useConversationStore } from "@/stores";
 import { SessionItem } from "./SessionItem";
 import { formatConversationDate } from "./utils";
@@ -20,7 +20,7 @@ export function AgentSessionsSection({
   onRenameAgentSession,
 }: AgentSessionsSectionProps) {
   const conversations = useConversationStore((state) => state.conversations);
-  const currentConversationId = useConversationStore((state) => state.currentConversationId);
+  const { conversationId: routeConversationId } = useParams<{ conversationId?: string }>();
   const renameConversation = useConversationStore((state) => state.renameConversation);
 
   const handleRename = (conversationId: string) => (title: string) => {
@@ -56,7 +56,7 @@ export function AgentSessionsSection({
               key={conversation.id}
               title={conversation.title}
               date={formatConversationDate(conversation.updatedAt)}
-              isActive={conversation.id === currentConversationId}
+              isActive={conversation.id === routeConversationId}
               disabled={isAgentProcessing}
               onClick={() => onSelectAgentSession(conversation.id)}
               onDelete={(event) => onDeleteAgentSession(conversation.id, event)}

@@ -28,7 +28,7 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
   const authUser = useAuthStore((state) => state.user);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const isEditor = location.pathname === "/editor";
-  const isAgent = location.pathname === "/agent";
+  const isAgent = location.pathname.startsWith("/agent");
   const isHome = location.pathname === "/";
 
   // 窗口控制函数

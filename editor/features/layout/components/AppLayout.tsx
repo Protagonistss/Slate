@@ -27,6 +27,7 @@ export function AppLayout() {
     ? "editor"
     : "home";
   const isSettingsRoute = location.pathname === "/settings";
+  const shouldAnimateOutlet = !isSettingsRoute && currentMode !== "agent";
 
   return (
     <>
@@ -54,7 +55,7 @@ export function AppLayout() {
               <main className="h-full relative overflow-hidden flex flex-col bg-obsidian">
                 <div className="flex-1 h-full w-full relative flex flex-col z-0">
                   <div className="flex-1 h-full w-full relative flex flex-col z-0 bg-charcoal/20">
-                    {isSettingsRoute ? (
+                    {!shouldAnimateOutlet ? (
                       <div className="h-full w-full">
                         <Outlet />
                       </div>

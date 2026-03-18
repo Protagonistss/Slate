@@ -31,6 +31,7 @@ export function useAgentState() {
   const initializeCatalog = useLLMCatalogStore((state) => state.initialize);
   const clearCatalog = useLLMCatalogStore((state) => state.clear);
   const createConversation = useConversationStore((state) => state.createConversation);
+  const currentConversationId = useConversationStore((state) => state.currentConversationId);
   const conversation = useConversationStore((state) =>
     state.currentConversationId
       ? state.conversations.find((item) => item.id === state.currentConversationId) || null
@@ -77,6 +78,7 @@ export function useAgentState() {
     initializeCatalog,
     clearCatalog,
     createConversation,
+    currentConversationId,
     conversation,
     // Agent hook values
     isProcessing,

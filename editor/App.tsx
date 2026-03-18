@@ -7,25 +7,35 @@ import { EditorView } from "@/features/editor/views";
 import { AgentView } from "@/features/agent/views";
 import { SettingsView } from "@/features/settings/views";
 import { useProjectStore } from "@/stores/projectStore";
-import { useAuthStore, useMcpStore } from "@/stores";
+import { useAuthStore, useMcpStore, useConversationStore } from "@/stores";
+import { useAgentStore } from "@/features/agent/store/agentStore";
+import { sessionStorage } from "@/services/storage";
+import { isTauriEnv } from "@/services/tauri";
 
 function App() {
   const [isReady, setIsReady] = useState(false);
   const { restoreLastProject } = useProjectStore();
   const { initialize: initializeMcp } = useMcpStore();
   const { restoreSession } = useAuthStore();
+  const { loadFromStorage: loadConversations } = useConversationStore();
+  const { loadFromStorage: loadAgentRuns } = useAgentStore();
 
   useEffect(() => {
     const initialize = async () => {
-      // 恢复上次的项目
       await restoreLastProject();
       await initializeMcp();
       await restoreSession();
+
+      if (isTauriEnv) {
+        await sessionStorage.initialize();
+        await Promise.all([loadConversations(), loadAgentRuns()]);
+      }
+
       setIsReady(true);
     };
 
     initialize();
-  }, [initializeMcp, restoreLastProject, restoreSession]);
+  }, [initializeMcp, restoreLastProject, restoreSession, loadConversations, loadAgentRuns]);
 
   if (!isReady) {
     return (
@@ -46,7 +56,7 @@ function App() {
       children: [
         { index: true, Component: HomeView },
         { path: "editor", Component: EditorView },
-        { path: "agent", Component: AgentView },
+        { path: "agent/:conversationId?", Component: AgentView },
         { path: "settings", Component: SettingsView },
       ],
     },

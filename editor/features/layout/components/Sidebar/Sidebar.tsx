@@ -22,7 +22,6 @@ export function Sidebar({ isOpen, currentMode }: SidebarProps) {
   const isAgentProcessing = useAgentStore((state) => state.isProcessing);
   const resetAgentState = useAgentStore((state) => state.reset);
   const deleteAgentRun = useAgentStore((state) => state.deleteRun);
-  const createConversation = useConversationStore((state) => state.createConversation);
   const setCurrentConversation = useConversationStore((state) => state.setCurrentConversation);
   const deleteConversation = useConversationStore((state) => state.deleteConversation);
 
@@ -41,30 +40,38 @@ export function Sidebar({ isOpen, currentMode }: SidebarProps) {
   const handleCreateAgentSession = () => {
     if (isAgentProcessing) return;
 
-    const conversationId = createConversation();
     resetAgentState();
     navigate("/agent");
-    setCurrentConversation(conversationId);
   };
 
   const handleSelectAgentSession = (conversationId: string) => {
     if (isAgentProcessing) return;
 
-    resetAgentState();
     setCurrentConversation(conversationId);
-    navigate("/agent");
+    navigate(`/agent/${conversationId}`);
   };
 
-  const handleDeleteAgentSession = (conversationId: string, event: ReactMouseEvent<HTMLButtonElement>) => {
+  const handleDeleteAgentSession = async (conversationId: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     if (isAgentProcessing) return;
 
-    const currentConversationId = useConversationStore.getState().currentConversationId;
-    deleteAgentRun(conversationId);
-    deleteConversation(conversationId);
-    if (conversationId === currentConversationId) {
+    const { currentConversationId, conversations } = useConversationStore.getState();
+    const isDeletingCurrentConversation = conversationId === currentConversationId;
+    const nextConversationId =
+      isDeletingCurrentConversation
+        ? conversations.find((conversation) => conversation.id !== conversationId)?.id || null
+        : currentConversationId;
+
+    if (isDeletingCurrentConversation) {
       resetAgentState();
+      if (nextConversationId) {
+        setCurrentConversation(nextConversationId);
+      }
+      navigate(nextConversationId ? `/agent/${nextConversationId}` : "/agent", { replace: true });
     }
+
+    deleteAgentRun(conversationId);
+    await deleteConversation(conversationId);
   };
 
   if (!isOpen) {

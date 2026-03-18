@@ -34,43 +34,60 @@ export function createStepsFromPlan(parsedSteps: ParsedPlanStep[]): AgentStep[] 
 }
 
 /**
+ * Parses the submit_plan tool payload
+ */
+function parsePlanPayload(payload: { title?: string; steps_json?: string }): { title: string; steps: AgentStep[] } | null {
+  if (!payload.steps_json || typeof payload.steps_json !== 'string') {
+    return null;
+  }
+
+  const parsedSteps = JSON.parse(payload.steps_json) as unknown[] as ParsedPlanStep[];
+  if (!Array.isArray(parsedSteps)) {
+    return null;
+  }
+
+  const validSteps = parsedSteps.filter((step) => {
+    return (
+      step &&
+      typeof step === 'object' &&
+      typeof step.title === 'string' &&
+      typeof step.summary === 'string' &&
+      Array.isArray(step.dependsOn)
+    );
+  });
+
+  if (validSteps.length === 0) {
+    return null;
+  }
+
+  const title = typeof payload.title === 'string' && payload.title.trim()
+    ? payload.title.trim()
+    : 'Execution plan';
+
+  return {
+    title,
+    steps: createStepsFromPlan(validSteps),
+  };
+}
+
+export function parsePlanToolInput(toolInput: Record<string, unknown>): { title: string; steps: AgentStep[] } | null {
+  try {
+    return parsePlanPayload({
+      title: typeof toolInput.title === 'string' ? toolInput.title : undefined,
+      steps_json: typeof toolInput.steps_json === 'string' ? toolInput.steps_json : undefined,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parses the submit_plan tool result
  */
 export function parsePlanToolResult(toolResult: string): { title: string; steps: AgentStep[] } | null {
   try {
     const parsed = JSON.parse(toolResult) as { title?: string; steps_json?: string };
-
-    if (!parsed.steps_json || typeof parsed.steps_json !== 'string') {
-      return null;
-    }
-
-    const parsedSteps = JSON.parse(parsed.steps_json) as unknown[] as ParsedPlanStep[];
-    if (!Array.isArray(parsedSteps)) {
-      return null;
-    }
-
-    const validSteps = parsedSteps.filter((step) => {
-      return (
-        step &&
-        typeof step === 'object' &&
-        typeof step.title === 'string' &&
-        typeof step.summary === 'string' &&
-        Array.isArray(step.dependsOn)
-      );
-    });
-
-    if (validSteps.length === 0) {
-      return null;
-    }
-
-    const title = typeof parsed.title === 'string' && parsed.title.trim()
-      ? parsed.title.trim()
-      : 'Execution plan';
-
-    return {
-      title,
-      steps: createStepsFromPlan(validSteps),
-    };
+    return parsePlanPayload(parsed);
   } catch {
     return null;
   }

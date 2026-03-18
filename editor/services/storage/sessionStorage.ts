@@ -24,6 +24,23 @@ const MESSAGES_FILE = 'messages.jsonl';
 const AGENT_RUN_FILE = 'agent-run.json';
 const INDEX_VERSION = 1;
 
+function isValidStoredMessage(value: unknown): value is StoredMessage {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<StoredMessage>;
+  const validRole =
+    candidate.role === 'user' ||
+    candidate.role === 'assistant' ||
+    candidate.role === 'system';
+  const validContent =
+    typeof candidate.content === 'string' ||
+    Array.isArray(candidate.content);
+
+  return validRole && validContent;
+}
+
 function joinPath(base: string, ...parts: string[]): string {
   const sep = base.includes('\\') ? '\\' : '/';
   const normalized = [base, ...parts].map((p, i) => {
@@ -173,6 +190,17 @@ class FileSessionStorage implements SessionStorageInterface {
     await writeTextFile(messagesPath, content + line);
   }
 
+  async replaceMessages(sessionId: string, messages: StoredMessage[]): Promise<void> {
+    this.ensureInitialized();
+
+    const messagesPath = joinPath(this.sessionsDir!, sessionId, MESSAGES_FILE);
+    const content = messages.length > 0
+      ? `${messages.map((message) => JSON.stringify(message)).join('\n')}\n`
+      : '';
+
+    await writeTextFile(messagesPath, content);
+  }
+
   async getMessages(sessionId: string): Promise<StoredMessage[]> {
     this.ensureInitialized();
 
@@ -186,10 +214,34 @@ class FileSessionStorage implements SessionStorageInterface {
       return [];
     }
 
-    return content
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line) as StoredMessage);
+    const parsedMessages: StoredMessage[] = [];
+    let hasMalformedLine = false;
+
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (isValidStoredMessage(parsed)) {
+          parsedMessages.push(parsed);
+        } else {
+          hasMalformedLine = true;
+          console.warn('[SessionStorage] Ignoring malformed stored message shape:', trimmed);
+        }
+      } catch (error) {
+        hasMalformedLine = true;
+        console.warn('[SessionStorage] Ignoring malformed message line:', trimmed, error);
+      }
+    }
+
+    if (hasMalformedLine) {
+      await this.replaceMessages(sessionId, parsedMessages);
+    }
+
+    return parsedMessages;
   }
 
   async saveAgentRun(sessionId: string, run: AgentRunFile): Promise<void> {

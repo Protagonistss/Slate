@@ -23,9 +23,9 @@ export interface UseAgentSessionResult {
   currentConversationId: string | null;
 
   // 会话操作
-  createConversation: (projectPath?: string) => string;
+  createConversation: (title?: string) => Promise<string>;
   setCurrentConversation: (id: string | null) => void;
-  deleteConversation: (id: string) => void;
+  deleteConversation: (id: string) => Promise<void>;
 
   // 计算属性
   currentRun: AgentRun | null;

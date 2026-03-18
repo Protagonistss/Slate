@@ -2,7 +2,7 @@
 import { streamBackendLLMChat } from '../../backend/llm';
 import { useConversationStore } from '@/stores/conversationStore';
 import type { MessageContext, StoreGetter, StoreSetter } from '../types';
-import { appendSystemPrompt, buildPlanningSystemPrompt } from '../internal/utils';
+import { appendSystemPrompt, buildPlanningSystemPrompt, sanitizeMessagesForLLM } from '../internal/utils';
 import { now } from '@/utils/date';
 import type { AgentRun } from '@/features/agent/store/types';
 import type { AssistantAccumulator } from '../types';
@@ -11,6 +11,7 @@ import { getConversationMessages, createAssistantMessage, appendAssistantText, a
 import { executeToolCall } from './toolExecutor';
 import { serializeToolResult } from '../internal/utils';
 import { updateRunState } from '../run/runOperations';
+import { parsePlanToolInput } from '../run/planParser';
 
 /**
  * Runs the planning phase
@@ -22,9 +23,12 @@ export async function planRun(
   setState: StoreSetter<import('@/features/agent/store/types').AgentState>,
   getState: StoreGetter<import('@/features/agent/store/types').AgentState>
 ): Promise<AgentRun> {
-  const planningMessages = appendSystemPrompt(
-    getConversationMessages(context.conversationId),
-    buildPlanningSystemPrompt(context.systemPrompt, context)
+  const planningMessages = sanitizeMessagesForLLM(
+    appendSystemPrompt(
+      getConversationMessages(context.conversationId),
+      buildPlanningSystemPrompt(context.systemPrompt, context)
+    ),
+    run.goal
   );
 
   const assistantMessageIndex = createAssistantMessage(context.conversationId);
@@ -105,6 +109,27 @@ export async function planRun(
 
   const planToolUse = accumulator.toolUses.find((tu) => tu.name === INTERNAL_AGENT_TOOL_NAMES.submitPlan);
   if (planToolUse) {
+    const planResult = parsePlanToolInput(planToolUse.input);
+
+    if (planResult) {
+      let nextRun = getState().runsByConversation[context.conversationId];
+      nextRun = {
+        ...nextRun,
+        steps: planResult.steps,
+        phase: 'paused',
+        updatedAt: now(),
+      };
+
+      setState((state: import('@/features/agent/store/types').AgentState) => ({
+        runsByConversation: {
+          ...state.runsByConversation,
+          [context.conversationId]: nextRun,
+        },
+      }));
+
+      return nextRun;
+    }
+
     const toolResult = await executeToolCall(
       { name: planToolUse.name, input: planToolUse.input },
       context

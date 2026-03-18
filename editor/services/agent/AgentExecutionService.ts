@@ -35,7 +35,7 @@ export class AgentExecutionService {
       return;
     }
 
-    const context = prepareNewGoalContext(content);
+    const context = await prepareNewGoalContext(content);
     if (!context) {
       setState({
         status: 'error',
@@ -48,18 +48,29 @@ export class AgentExecutionService {
     const abortController = new AbortController();
     let run = createRun(context, content.trim());
 
-    setState((state: import('@/features/agent/store/types').AgentState) => ({
-      status: 'thinking',
-      isProcessing: true,
-      currentStreamContent: '',
-      currentToolCalls: [],
-      error: null,
-      abortController,
-      runsByConversation: {
+    console.log('[AgentExecutionService] Creating run with conversationId:', context.conversationId);
+    console.log('[AgentExecutionService] Run:', run.id, run.phase);
+
+    setState((state: import('@/features/agent/store/types').AgentState) => {
+      const newRuns = {
         ...state.runsByConversation,
         [context.conversationId]: run,
-      },
-    }));
+      };
+      console.log('[AgentExecutionService] setState - new runsByConversation keys:', Object.keys(newRuns));
+      return {
+        status: 'thinking',
+        isProcessing: true,
+        currentStreamContent: '',
+        currentToolCalls: [],
+        error: null,
+        abortController,
+        runsByConversation: newRuns,
+      };
+    });
+
+    console.log('[AgentExecutionService] After setState, checking state...');
+    const stateAfterSet = getState();
+    console.log('[AgentExecutionService] State after set - runsByConversation keys:', Object.keys(stateAfterSet.runsByConversation));
 
     try {
       // Phase 1: Planning
@@ -86,6 +97,7 @@ export class AgentExecutionService {
         status: finalRun?.phase === 'error' ? 'error' : 'idle',
         isProcessing: false,
         currentStreamContent: '',
+        currentToolCalls: [],
         abortController: null,
       });
     } catch (error) {
@@ -95,6 +107,7 @@ export class AgentExecutionService {
         isProcessing: false,
         abortController: null,
         currentStreamContent: '',
+        currentToolCalls: [],
         runsByConversation: updateRunState({ runsByConversation: state.runsByConversation }, context.conversationId, (runState) => ({
           ...runState,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -160,6 +173,7 @@ export class AgentExecutionService {
         status: finalRun?.phase === 'error' ? 'error' : 'idle',
         isProcessing: false,
         currentStreamContent: '',
+        currentToolCalls: [],
         abortController: null,
       });
     } catch (error) {
@@ -169,6 +183,7 @@ export class AgentExecutionService {
         isProcessing: false,
         abortController: null,
         currentStreamContent: '',
+        currentToolCalls: [],
         runsByConversation: updateRunState({ runsByConversation: state.runsByConversation }, context.conversationId, (runState) => ({
           ...runState,
           error: error instanceof Error ? error.message : 'Unknown error',

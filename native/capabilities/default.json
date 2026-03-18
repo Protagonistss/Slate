@@ -16,6 +16,13 @@
     "fs:allow-mkdir",
     "fs:allow-remove",
     "fs:allow-read-dir",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$HOME/.slate",
+        "$HOME/.slate/**"
+      ]
+    },
     "shell:allow-execute",
     "shell:allow-open",
     {
