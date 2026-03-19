@@ -79,7 +79,7 @@ export function Sidebar({ isOpen, currentMode }: SidebarProps) {
   }
 
   return (
-    <Panel defaultSize={22} minSize={18} maxSize={32} id="left-sidebar" order={1}>
+    <Panel defaultSize={26} minSize={18} maxSize={38} id="left-sidebar" order={1}>
       <aside className="h-full bg-charcoal border-r border-graphite flex flex-col">
         <div
           className={cn(

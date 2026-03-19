@@ -246,8 +246,8 @@ export function AgentView() {
   return (
     <div className="flex h-full flex-1 flex-col w-full mx-auto overflow-hidden bg-obsidian">
       <div className="flex-1 p-4 lg:p-6 pb-2 flex flex-col space-y-6 min-h-0">
-        <section className="flex flex-col lg:grid lg:grid-cols-5 gap-6 items-stretch flex-1 min-h-0 pb-4">
-          <div className="lg:col-span-2 flex flex-col h-full min-h-0">
+        <section className="flex flex-col lg:grid lg:grid-cols-12 gap-6 items-stretch flex-1 min-h-0 pb-4">
+          <div className="lg:col-span-5 flex flex-col h-full min-h-0">
             <div className="flex items-center justify-between px-2 mb-4 shrink-0">
               <h3 className="text-xs font-semibold text-zinc-300">Execution Plan</h3>
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
@@ -266,8 +266,8 @@ export function AgentView() {
             />
           </div>
 
-          <div className="lg:col-span-3 flex flex-col h-full min-h-0">
-            <div className="flex flex-col h-full min-h-0 pl-2 lg:pl-6 text-zinc-300 font-sans">
+          <div className="lg:col-span-7 flex flex-col h-full min-h-0">
+            <div className="flex flex-col h-full min-h-0 pl-2 lg:pl-5 text-zinc-300 font-sans">
               <div
                 ref={timelineScrollRef}
                 className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800/50 pr-4 pb-12 pt-2"

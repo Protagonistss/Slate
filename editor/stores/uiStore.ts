@@ -70,7 +70,8 @@ const toastTimers = new Map<string, NodeJS.Timeout>();
 export const useUIStore = create<UIState>((set, get) => ({
   mode: 'agent',
   sidebarVisible: true,
-  sidebarWidth: 250,
+  /** 与侧栏视觉目标宽度对齐（供后续与 Panel 持久化联动） */
+  sidebarWidth: 280,
   agentPanelVisible: true,
   agentPanelWidth: 400,
   settingsOpen: false,

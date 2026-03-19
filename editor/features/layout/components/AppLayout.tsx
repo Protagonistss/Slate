@@ -60,7 +60,7 @@ export function AppLayout() {
 
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="flex-1 flex overflow-hidden min-h-0">
-            <PanelGroup direction="horizontal">
+            <PanelGroup direction="horizontal" autoSaveId="slate-layout-horizontal">
               <Sidebar
                 isOpen={leftSidebarOpen}
                 currentMode={currentMode}
@@ -70,8 +70,8 @@ export function AppLayout() {
               )}
 
               <Panel id="center-area" order={2} defaultSize={100} minSize={30}>
-                <PanelGroup direction="vertical">
-                  <Panel id="main-content" order={1} defaultSize={terminalPanelVisible ? 70 : 100} minSize={30}>
+                <PanelGroup direction="vertical" autoSaveId="slate-layout-vertical">
+                  <Panel id="main-content" order={1} defaultSize={terminalPanelVisible ? 80 : 100} minSize={30}>
                     <main className="h-full relative overflow-hidden flex flex-col bg-obsidian">
                       <div className="flex-1 h-full w-full relative flex flex-col z-0">
                         <div className="flex-1 h-full w-full relative flex flex-col z-0 bg-charcoal/20">
