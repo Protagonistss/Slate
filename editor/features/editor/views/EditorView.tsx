@@ -1,17 +1,18 @@
 import { useEffect, useState, useRef } from "react";
 import { AnimatePresence } from "motion/react";
-import { MonacoEditor, type MonacoEditorRef } from "@/components/editor/MonacoEditor";
-import { SimpleLogo } from "@/components/shared";
+import { MonacoEditor, type MonacoEditorRef } from "@/features/editor/components";
+import { SimpleLogo } from "@/shared/ui";
 import { useEditorStore } from "@/stores/editorStore";
 import { useProjectStore } from "@/stores";
 import { useStatusBarStore } from "@/stores/statusBarStore";
 import { useGitStatusStore } from "@/stores/gitStatusStore";
 import { getRecentProjects, type ProjectRecord } from "@/services/config";
 import { DEFAULT_CURSOR } from "./utils/editorConstants";
-import { EditorTab } from "./components/EditorTab";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { AiInputBar } from "./components/AiInputBar";
-import { useEditorState } from "./hooks/useEditorState";
+import { useAiEditorState } from "@/shared/hooks";
+import { Tabs } from "@/shared/ui";
+import { X } from "lucide-react";
 
 export function EditorView() {
   const editorRef = useRef<MonacoEditorRef | null>(null);
@@ -33,7 +34,7 @@ export function EditorView() {
   const [cursorPosition, setCursorPosition] = useState<{ lineNumber: number; column: number }>(DEFAULT_CURSOR);
   const [recentProjects, setRecentProjects] = useState<ProjectRecord[]>([]);
 
-  const editorState = useEditorState();
+  const editorState = useAiEditorState();
   const { setCursor, setLanguage, setModel } = useStatusBarStore();
   const { scheduleRefresh } = useGitStatusStore();
   const [gitDiffRefreshSeq, setGitDiffRefreshSeq] = useState(0);
@@ -104,16 +105,52 @@ export default function Component() {
       {/* File Tabs */}
       {openFiles.length > 0 && (
         <div className="h-9 border-b border-graphite bg-obsidian flex items-center overflow-x-auto select-none px-2 shrink-0">
-          {openFiles.map((file) => (
-            <EditorTab
-              key={file.path}
-              name={file.name}
-              isActive={activeFilePath === file.path}
-              isModified={file.isModified}
-              onClick={() => setActiveFile(file.path)}
-              onClose={() => closeFile(file.path)}
-            />
-          ))}
+          <Tabs
+            variant="underline"
+            items={openFiles.map((file) => ({
+              id: file.path,
+              isActive: activeFilePath === file.path,
+              onSelect: () => setActiveFile(file.path),
+              label: (
+                <span className="max-w-[160px] truncate leading-none">
+                  {file.name}
+                </span>
+              ),
+              leading: (
+                <div className="flex items-center justify-center w-2 flex-shrink-0">
+                  {file.isModified ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
+                  )}
+                </div>
+              ),
+              trailing: (
+                <span className="pointer-events-auto">
+                  <button
+                    type="button"
+                    className="group/close flex items-center justify-center ml-0.5 w-4 h-4 rounded hover:bg-white/10 transition-colors cursor-pointer"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      closeFile(file.path);
+                    }}
+                    aria-label="Close tab"
+                  >
+                    <X
+                      size={14}
+                      className={
+                        activeFilePath === file.path
+                          ? "text-zinc-500 group-hover/close:text-zinc-200 transition-colors"
+                          : "text-transparent group-hover/tab:text-zinc-500 group-hover/close:!text-zinc-200 transition-colors"
+                      }
+                    />
+                  </button>
+                </span>
+              ),
+            }))}
+            listClassName="gap-0"
+            itemClassName="h-full gap-2 group/tab"
+          />
         </div>
       )}
 

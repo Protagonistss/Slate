@@ -82,14 +82,12 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
     const decorationsRef = useRef<string[]>([]);
     const diffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // 更新 refs
     useEffect(() => {
       onChangeRef.current = onChange;
       onSaveRef.current = onSave;
       onCursorPositionChangeRef.current = onCursorPositionChange;
     }, [onChange, onSave, onCursorPositionChange]);
 
-    // 暴露编辑器 API
     const getContent = useCallback(() => editorRef.current?.getValue() || '', []);
     const setContent = useCallback((content: string) => {
       editorRef.current?.setValue(content);
@@ -216,7 +214,6 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
       });
     }, []);
 
-    // 初始化编辑器
     useEffect(() => {
       if (!containerRef.current || editorRef.current) return;
 
@@ -260,12 +257,10 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
 
       editorRef.current = editorInstance;
 
-      // 监听内容变化
       const disposable = editorInstance.onDidChangeModelContent(() => {
         onChangeRef.current?.(editorInstance.getValue());
       });
 
-      // 添加保存快捷键
       editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         onSaveRef.current?.(editorInstance.getValue());
       });
@@ -287,7 +282,6 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
       };
     }, [defineSlateTheme, fontSize, language, lineNumbers, minimap, readOnly, theme, value, wordWrap]);
 
-    // 更新值
     useEffect(() => {
       const ed = editorRef.current;
       if (!ed) return;
@@ -381,12 +375,10 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
         });
         applyGitDiffDecorations(Array.isArray(ranges) ? ranges : []);
       } catch {
-        // Git 不可用或非仓库时不显示 diff decorations
         applyGitDiffDecorations([]);
       }
     }, [applyGitDiffDecorations, filePath, projectPath]);
 
-    // Debounced refresh on file/project/trigger changes
     useEffect(() => {
       if (diffTimerRef.current) {
         clearTimeout(diffTimerRef.current);

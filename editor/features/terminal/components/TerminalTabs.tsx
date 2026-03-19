@@ -2,6 +2,7 @@ import { Plus, X, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTerminalStore } from '../store';
 import { useProjectStore } from '@/stores';
+import { Tabs } from "@/shared/ui";
 
 export function TerminalTabs() {
   const sessions = useTerminalStore((s) => s.sessions);
@@ -27,40 +28,41 @@ export function TerminalTabs() {
     );
   }
 
+  const items = sessions.map((session) => ({
+    id: session.id,
+    isActive: activeId === session.id,
+    onSelect: () => setActive(session.id),
+    leading: <Terminal size={11} className="shrink-0 text-zinc-500" strokeWidth={1.5} />,
+    label: session.title,
+    trailing: (
+      <>
+        {session.status === 'running' && (
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/90 shadow-[0_0_6px_rgba(16,185,129,0.35)] shrink-0" />
+        )}
+        {session.status === 'exited' && (
+          <div className="w-1.5 h-1.5 rounded-full bg-zinc-500/70 shrink-0" />
+        )}
+        <span className="pointer-events-auto">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeSession(session.id);
+            }}
+            className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 shrink-0 transition-opacity"
+            aria-label="Close terminal"
+          >
+            <X size={11} />
+          </button>
+        </span>
+      </>
+    ),
+    className: cn('max-w-[140px] min-w-[88px]'),
+  }));
+
   return (
     <div className="flex items-center flex-1 min-w-0 overflow-x-auto">
-      <div className="flex items-center flex-1 min-w-0 gap-px">
-        {sessions.map((session) => (
-          <div
-            key={session.id}
-            className={cn(
-              'group flex items-center gap-2 px-2.5 h-7 cursor-pointer min-w-[88px] max-w-[140px] rounded-md transition-colors shrink-0',
-              activeId === session.id
-                ? 'bg-zinc-800/80 text-zinc-200 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
-            )}
-            onClick={() => setActive(session.id)}
-          >
-            <Terminal size={11} className="shrink-0 text-zinc-500" strokeWidth={1.5} />
-            <span className="text-[11px] truncate flex-1">{session.title}</span>
-            {session.status === 'running' && (
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/90 shadow-[0_0_6px_rgba(16,185,129,0.35)] shrink-0" />
-            )}
-            {session.status === 'exited' && (
-              <div className="w-1.5 h-1.5 rounded-full bg-zinc-500/70 shrink-0" />
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                closeSession(session.id);
-              }}
-              className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 shrink-0 transition-opacity"
-            >
-              <X size={11} />
-            </button>
-          </div>
-        ))}
-      </div>
+      <Tabs items={items} />
       <button
         onClick={() => createSession(cwd)}
         className="p-1.5 rounded-md hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 ml-0.5"

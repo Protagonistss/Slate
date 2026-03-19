@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type AiStatus = "idle" | "generating" | "diff";
 
-export function useEditorState() {
+export function useAiEditorState() {
   const [prompt, setPrompt] = useState("");
   const [aiStatus, setAiStatus] = useState<AiStatus>("idle");
   const [selectedModel, setSelectedModel] = useState("claude-3.5-sonnet");

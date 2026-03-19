@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 
-interface LogoProps {
+export interface LogoProps {
   className?: string;
   to?: string;
 }
@@ -26,8 +26,7 @@ export function Logo({ className, to = "/" }: LogoProps) {
   return logoElement;
 }
 
-// 简化版 Logo（无链接，无容器）
-interface SimpleLogoProps {
+export interface SimpleLogoProps {
   size?: number;
   className?: string;
 }
@@ -45,7 +44,6 @@ export function SimpleLogo({ size = 32, className }: SimpleLogoProps) {
   );
 }
 
-// 用于 favicon 的 SVG
 export const LogoSVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>

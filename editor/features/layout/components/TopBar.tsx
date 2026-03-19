@@ -13,9 +13,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Logo } from "@/components/shared";
+import { Logo } from "@/shared/ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAuthStore } from "@/stores";
+import { IconButton } from "@/shared/ui";
 
 interface TopBarProps {
   onToggleRightSidebar?: () => void;
@@ -125,23 +126,23 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
       >
         <div className="flex items-center gap-1.5 pr-1" style={{ pointerEvents: "auto" }}>
           {onToggleRightSidebar && (
-            <button
+            <IconButton
               onClick={onToggleRightSidebar}
               className={cn(
-                "p-1.5 rounded-md transition-all",
+                "transition-all",
                 rightSidebarOpen ? "bg-zinc-800 text-zinc-100" : "hover:bg-zinc-800 text-zinc-500"
               )}
             >
               <History size={16} />
-            </button>
+            </IconButton>
           )}
-          <button className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors">
+          <IconButton className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg">
             <Share2 size={16} />
-          </button>
-          <button
+          </IconButton>
+          <IconButton
             onClick={() => navigate("/settings")}
             className={cn(
-              "p-1.5 rounded-md transition-all",
+              "transition-all",
               location.pathname === "/settings"
                 ? "bg-zinc-800 text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
@@ -149,7 +150,7 @@ export function TopBar({ onToggleRightSidebar, rightSidebarOpen = false }: TopBa
             title="Settings"
           >
             <Settings size={16} />
-          </button>
+          </IconButton>
           <div className="h-3.5 w-px bg-graphite" />
           <div
             onClick={() => navigate("/settings#account")}

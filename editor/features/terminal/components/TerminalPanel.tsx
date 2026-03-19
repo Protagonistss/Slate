@@ -5,6 +5,7 @@ import { useTerminalStore } from '../store';
 import { useProjectStore } from '@/stores';
 import { TerminalTabs } from './TerminalTabs';
 import { TerminalInstance } from './TerminalInstance';
+import { IconButton } from "@/shared/ui";
 
 interface TerminalPanelProps {
   isMaximized?: boolean;
@@ -51,20 +52,18 @@ export function TerminalPanel({ isMaximized, onToggleMaximize }: TerminalPanelPr
               </span>
             )}
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
-              <button
+              <IconButton
                 onClick={onToggleMaximize}
-                className="p-1.5 rounded-md hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
                 title={isMaximized ? 'Restore' : 'Maximize'}
               >
                 {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-              </button>
-              <button
+              </IconButton>
+              <IconButton
                 onClick={() => setPanelVisible(false)}
-                className="p-1.5 rounded-md hover:bg-white/5 text-zinc-500 hover:text-zinc-300 transition-colors"
                 title="Close Panel"
               >
                 <X size={13} />
-              </button>
+              </IconButton>
             </div>
           </div>
 
