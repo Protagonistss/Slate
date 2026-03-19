@@ -179,16 +179,26 @@ export function buildExecutionSystemPrompt(
     return `- ${step.id}: ${step.title} [${step.status}]`;
   });
 
+  const apiReasoningEnabled = Boolean(context.llmConfig.reasoningEffort);
+
   return [
     basePrompt?.trim() || '',
     'You are executing an approved Slate engineering plan.',
     `Goal: ${run.goal}`,
     'Execution rules:',
     `1. Before work starts on a step, call "${INTERNAL_AGENT_TOOL_NAMES.updateStepStatus}" with status="running".`,
-    `2. Use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" to record your step-by-step thinking for EACH step.`,
-    `   - At minimum: one note when a step starts, and one note before each external tool call (what you are about to do and why).`,
-    `   - Keep notes focused on the current step, 1-4 sentences each.`,
-    `   - Do not use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" for final summaries or repeating file/tool output.`,
+    apiReasoningEnabled
+      ? `2. The model gateway may stream API-level reasoning separately. Use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" only for short, step-scoped notes when needed (e.g. before external tool calls), and avoid repeating long reasoning already shown in the API stream.`
+      : `2. Use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" to record your step-by-step thinking for EACH step.`,
+    apiReasoningEnabled
+      ? `   - Keep each note 1-3 sentences; do not use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" for final summaries or repeating file/tool output.`
+      : `   - At minimum: one note when a step starts, and one note before each external tool call (what you are about to do and why).`,
+    apiReasoningEnabled
+      ? ''
+      : `   - Keep notes focused on the current step, 1-4 sentences each.`,
+    apiReasoningEnabled
+      ? ''
+      : `   - Do not use "${INTERNAL_AGENT_TOOL_NAMES.appendReasoning}" for final summaries or repeating file/tool output.`,
     `3. Use "${INTERNAL_AGENT_TOOL_NAMES.appendStepSummary}" whenever you have a meaningful result for a step.`,
     `4. Use "${INTERNAL_AGENT_TOOL_NAMES.attachArtifact}" for files, plans, or tool outputs worth showing in Live Artifacts.`,
     `5. When a step completes, call "${INTERNAL_AGENT_TOOL_NAMES.updateStepStatus}" with status="completed".`,

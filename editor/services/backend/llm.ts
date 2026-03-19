@@ -30,6 +30,8 @@ export interface BackendLLMChatRequest {
   tools?: ToolDefinition[];
   temperature?: number;
   max_tokens?: number;
+  /** OpenAI 协议上游：reasoning_effort；后端按 provider.protocol 决定是否写入请求体 */
+  reasoning_effort?: string | null;
 }
 
 export interface BackendLLMProviderUpsertRequest {

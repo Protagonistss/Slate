@@ -3,6 +3,7 @@ export {
   createArtifact,
   replaceArtifact,
   addReasoningEntry,
+  appendStreamingApiReasoningDelta,
   updateRunStep,
   appendStepEvidence,
   appendStepSummary,

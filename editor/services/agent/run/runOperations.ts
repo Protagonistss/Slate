@@ -104,6 +104,38 @@ export function addReasoningEntry(
 }
 
 /**
+ * Merge token/chunk deltas from the provider's streaming reasoning into one timeline entry.
+ * When continuingPreviousApiReasoning is true, appends delta to the last entry if phase/stepId match.
+ */
+export function appendStreamingApiReasoningDelta(
+  run: AgentRun,
+  phase: AgentReasoningPhase,
+  stepId: string | null,
+  delta: string,
+  continuingPreviousApiReasoning: boolean
+): AgentRun {
+  if (!delta) {
+    return run;
+  }
+
+  if (continuingPreviousApiReasoning) {
+    const last = run.reasoningEntries[run.reasoningEntries.length - 1];
+    if (last && last.phase === phase && last.stepId === (stepId ?? null)) {
+      return {
+        ...run,
+        updatedAt: now(),
+        reasoningEntries: [
+          ...run.reasoningEntries.slice(0, -1),
+          { ...last, text: last.text + delta },
+        ].slice(-40),
+      };
+    }
+  }
+
+  return addReasoningEntry(run, phase, delta, stepId);
+}
+
+/**
  * Updates a single step in the run
  */
 export function updateRunStep(

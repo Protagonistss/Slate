@@ -1,6 +1,6 @@
 // AI Models Settings 工具函数
 import type { BackendLLMProvider } from "@/services/backend/llm";
-import type { LLMConfig } from "@/services/llm/types";
+import type { LLMConfig, ReasoningEffortLevel } from "@/services/llm/types";
 
 export interface ProviderDraft {
   displayName: string;
@@ -8,6 +8,8 @@ export interface ProviderDraft {
   modelText: string;
   baseUrl: string;
   apiKey: string;
+  /** 空字符串表示不传 reasoning_effort */
+  reasoningEffort: string;
 }
 
 export const EMPTY_DRAFT: ProviderDraft = {
@@ -16,7 +18,26 @@ export const EMPTY_DRAFT: ProviderDraft = {
   modelText: "",
   baseUrl: "",
   apiKey: "",
+  reasoningEffort: "",
 };
+
+/** UI 选项 value 与 OpenAI reasoning_effort 对齐；空为不传参 */
+export const REASONING_EFFORT_SELECT_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "默认（不传）" },
+  { value: "none", label: "none" },
+  { value: "minimal", label: "minimal" },
+  { value: "low", label: "low" },
+  { value: "medium", label: "medium" },
+  { value: "high", label: "high" },
+  { value: "xhigh", label: "xhigh" },
+];
+
+export function parseReasoningEffortDraft(value: string): ReasoningEffortLevel | undefined {
+  if (!value.trim()) {
+    return undefined;
+  }
+  return value as ReasoningEffortLevel;
+}
 
 export function parseModels(value: string): string[] {
   return value
@@ -53,6 +74,7 @@ export function createDraft(provider: BackendLLMProvider, config?: LLMConfig | n
     modelText: getModelInputValue(provider),
     baseUrl: provider.base_url || "",
     apiKey: "",
+    reasoningEffort: config?.reasoningEffort ?? "",
   };
 }
 

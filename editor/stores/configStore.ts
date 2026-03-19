@@ -88,6 +88,7 @@ export const useConfigStore = create<ConfigState>()(
               maxTokens: existingConfig?.maxTokens ?? 4096,
               temperature: existingConfig?.temperature ?? 0.7,
               systemPrompt: existingConfig?.systemPrompt,
+              reasoningEffort: existingConfig?.reasoningEffort,
             };
           });
 

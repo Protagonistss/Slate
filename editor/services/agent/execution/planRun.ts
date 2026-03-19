@@ -10,7 +10,7 @@ import { createPlanningTool, INTERNAL_AGENT_TOOL_NAMES } from '../internal/tools
 import { getConversationMessages, createAssistantMessage, appendAssistantText, appendAssistantToolUse } from '../streaming';
 import { executeToolCall } from './toolExecutor';
 import { serializeToolResult } from '../internal/utils';
-import { updateRunState } from '../run/runOperations';
+import { updateRunState, appendStreamingApiReasoningDelta } from '../run/runOperations';
 import { parsePlanToolInput } from '../run/planParser';
 
 /**
@@ -38,6 +38,8 @@ export async function planRun(
     toolUses: [],
   };
 
+  let apiReasoningStreamOpen = false;
+
   for await (const chunk of streamBackendLLMChat(
     {
       provider: context.llmConfig.provider,
@@ -46,6 +48,7 @@ export async function planRun(
       tools: [createPlanningTool()],
       temperature: context.llmConfig.temperature,
       max_tokens: context.llmConfig.maxTokens,
+      reasoning_effort: context.llmConfig.reasoningEffort ?? null,
     },
     abortController.signal
   )) {
@@ -55,6 +58,7 @@ export async function planRun(
 
     switch (chunk.type) {
       case 'content':
+        apiReasoningStreamOpen = false;
         appendAssistantText(
           context.conversationId,
           assistantMessageIndex,
@@ -68,6 +72,7 @@ export async function planRun(
         break;
 
       case 'tool_use':
+        apiReasoningStreamOpen = false;
         if (chunk.toolUse) {
           appendAssistantToolUse(
             context.conversationId,
@@ -83,7 +88,27 @@ export async function planRun(
         }
         break;
 
+      case 'reasoning': {
+        const delta = chunk.content ?? '';
+        if (!delta) {
+          break;
+        }
+        const continuing = apiReasoningStreamOpen;
+        if (!continuing && !delta.trim()) {
+          break;
+        }
+        setState((state: import('@/features/agent/store/types').AgentState) => ({
+          status: 'streaming',
+          runsByConversation: updateRunState(state, context.conversationId, (r) =>
+            appendStreamingApiReasoningDelta(r, 'planning', null, delta, continuing)
+          ),
+        }));
+        apiReasoningStreamOpen = true;
+        break;
+      }
+
       case 'error':
+        apiReasoningStreamOpen = false;
         setState((state: import('@/features/agent/store/types').AgentState) => ({
           status: 'error',
           error: chunk.error || 'Unknown error',

@@ -17,6 +17,7 @@ export type {
   Message,
   ToolDefinition,
   LLMConfig,
+  ReasoningEffortLevel,
   StreamChunk,
   ILLMAdapter,
 } from '../services/llm/types';

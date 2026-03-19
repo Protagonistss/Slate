@@ -63,7 +63,9 @@ export function ProviderList({
     }
 
     setCurrentProvider(provider.name);
+    const prev = llmConfigs[provider.name];
     setLLMConfig(provider.name, {
+      ...prev,
       provider: provider.name,
       model,
     });

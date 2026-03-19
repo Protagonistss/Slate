@@ -36,6 +36,7 @@ class LLMChatRequest(BaseModel):
     tools: list[ToolDefinition] = Field(default_factory=list)
     temperature: float | None = None
     max_tokens: int | None = None
+    reasoning_effort: str | None = None
 
 
 class LLMProviderUpsertRequest(BaseModel):
@@ -47,7 +48,7 @@ class LLMProviderUpsertRequest(BaseModel):
 
 
 class LLMStreamEvent(BaseModel):
-    type: Literal["content", "tool_use", "tool_result", "error", "done"]
+    type: Literal["content", "reasoning", "tool_use", "tool_result", "error", "done"]
     content: str | None = None
     toolUse: dict[str, Any] | None = None
     toolResult: dict[str, Any] | None = None

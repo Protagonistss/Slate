@@ -93,6 +93,15 @@ export interface ToolDefinition {
   };
 }
 
+/** OpenAI 等推理模型可调 effort；空/不传则上游默认 */
+export type ReasoningEffortLevel =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh';
+
 // LLM 配置
 export interface LLMConfig {
   provider: LLMProvider;
@@ -102,11 +111,13 @@ export interface LLMConfig {
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;
+  /** 仅对支持 reasoning_effort 的 OpenAI 协议上游生效；未设置则不传参 */
+  reasoningEffort?: ReasoningEffortLevel;
 }
 
 // 流式响应块
 export interface StreamChunk {
-  type: 'content' | 'tool_use' | 'tool_result' | 'error' | 'done';
+  type: 'content' | 'reasoning' | 'tool_use' | 'tool_result' | 'error' | 'done';
   content?: string;
   toolUse?: {
     id: string;

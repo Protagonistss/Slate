@@ -9,7 +9,12 @@ import {
   type BackendLLMProvider,
 } from "@/services/backend/llm";
 import type { LLMConfig } from "@/services/llm/types";
-import { parseModels, getSelectedModel, type ProviderDraft } from "../components/AIModelsSettings/utils";
+import {
+  parseModels,
+  getSelectedModel,
+  parseReasoningEffortDraft,
+  type ProviderDraft,
+} from "../components/AIModelsSettings/utils";
 
 export interface UseLLMCatalogResult {
   // 状态
@@ -135,15 +140,21 @@ export function useLLMCatalog(): UseLLMCatalogResult {
         await refresh();
         syncLLMProviders(useLLMCatalogStore.getState().providers);
         setCurrentProvider(saved.name);
+        const prevCustom = llmConfigs[saved.name] ?? llmConfigs[provider.name];
         setLLMConfig(saved.name, {
+          ...prevCustom,
           provider: saved.name,
           model: nextModel,
+          reasoningEffort: parseReasoningEffortDraft(draft.reasoningEffort),
         });
       } else {
         setCurrentProvider(provider.name);
+        const prevBuiltin = llmConfigs[provider.name];
         setLLMConfig(provider.name, {
+          ...prevBuiltin,
           provider: provider.name,
           model: nextModel,
+          reasoningEffort: parseReasoningEffortDraft(draft.reasoningEffort),
         });
       }
 

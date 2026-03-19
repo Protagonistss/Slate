@@ -15,7 +15,14 @@ import {
   appendAssistantText,
   appendAssistantToolUse,
 } from '../streaming';
-import { updateRunState, ensureRunnableStep, appendStepSummary, setStepStatus, deriveRunPhase } from '../run/runOperations';
+import {
+  updateRunState,
+  ensureRunnableStep,
+  appendStepSummary,
+  setStepStatus,
+  deriveRunPhase,
+  appendStreamingApiReasoningDelta,
+} from '../run/runOperations';
 import { executeToolCall, executeToolUses } from './toolExecutor';
 import type { AssistantAccumulator } from '../types';
 
@@ -61,6 +68,8 @@ export async function runExecutionLoop(
       toolUses: [],
     };
     let streamFailed = false;
+    /** 同一次 SSE 里连续的 API reasoning 块合并为一条 reasoning entry，避免每 token 一条 */
+    let apiReasoningStreamOpen = false;
 
     for await (const chunk of streamBackendLLMChat(
       {
@@ -70,6 +79,7 @@ export async function runExecutionLoop(
         tools: [...context.externalTools, ...createExecutionRuntimeTools()],
         temperature: context.llmConfig.temperature,
         max_tokens: context.llmConfig.maxTokens,
+        reasoning_effort: context.llmConfig.reasoningEffort ?? null,
       },
       abortController.signal
     )) {
@@ -79,6 +89,7 @@ export async function runExecutionLoop(
 
       switch (chunk.type) {
         case 'content':
+          apiReasoningStreamOpen = false;
           appendAssistantText(
             context.conversationId,
             assistantMessageIndex,
@@ -92,6 +103,7 @@ export async function runExecutionLoop(
           break;
 
         case 'tool_use':
+          apiReasoningStreamOpen = false;
           if (chunk.toolUse) {
             appendAssistantToolUse(
               context.conversationId,
@@ -107,7 +119,33 @@ export async function runExecutionLoop(
           }
           break;
 
+        case 'reasoning': {
+          const delta = chunk.content ?? '';
+          if (!delta) {
+            break;
+          }
+          const continuing = apiReasoningStreamOpen;
+          if (!continuing && !delta.trim()) {
+            break;
+          }
+          set((state: import('@/features/agent/store/types').AgentState) => ({
+            status: 'streaming',
+            runsByConversation: updateRunState(
+              { runsByConversation: state.runsByConversation },
+              context.conversationId,
+              (r) => {
+                const stepId =
+                  r.activeStepId ?? r.steps.find((s) => s.status === 'running')?.id ?? null;
+                return appendStreamingApiReasoningDelta(r, 'execution', stepId, delta, continuing);
+              }
+            ),
+          }));
+          apiReasoningStreamOpen = true;
+          break;
+        }
+
         case 'error':
+          apiReasoningStreamOpen = false;
           streamFailed = true;
           set((state: import('@/features/agent/store/types').AgentState) => ({
             status: 'error',

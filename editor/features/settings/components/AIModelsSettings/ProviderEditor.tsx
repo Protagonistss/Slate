@@ -2,8 +2,7 @@
 import { cn } from "@/lib/utils";
 import { getBackendBaseUrl } from "@/services/backend/auth";
 import type { BackendLLMProvider } from "@/services/backend/llm";
-import type { LLMConfig } from "@/services/llm/types";
-import type { ProviderDraft } from "./utils";
+import { REASONING_EFFORT_SELECT_OPTIONS, type ProviderDraft } from "./utils";
 
 export interface ProviderEditorProps {
   provider: BackendLLMProvider;
@@ -77,6 +76,8 @@ export function ProviderEditor({
                 )}
               </div>
             </div>
+
+            <ReasoningEffortSelect draft={draft} onChange={onChange} />
           </>
         ) : (
           <>
@@ -115,6 +116,8 @@ export function ProviderEditor({
                 </div>
               </div>
             </div>
+
+            <ReasoningEffortSelect draft={draft} onChange={onChange} />
           </>
         )}
       </div>
@@ -157,6 +160,49 @@ interface ProviderFormFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
   type?: "text" | "password";
+}
+
+function ReasoningEffortSelect({
+  draft,
+  onChange,
+}: {
+  draft: ProviderDraft;
+  onChange: (draft: ProviderDraft) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-4">
+        <label className="w-24 flex-shrink-0 text-[12px] text-zinc-400">推理强度</label>
+        <div className="relative flex-1">
+          <select
+            value={draft.reasoningEffort}
+            onChange={(event) => onChange({ ...draft, reasoningEffort: event.target.value })}
+            className="w-full appearance-none border-b border-white/10 bg-transparent pb-1.5 pr-8 text-[12px] text-zinc-300 transition-colors focus:border-zinc-500 focus:outline-none"
+          >
+            {REASONING_EFFORT_SELECT_OPTIONS.map((opt) => (
+              <option key={opt.value || "default"} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-zinc-500">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M3 4.5L6 7.5L9 4.5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+      <p className="ml-28 text-[11px] text-zinc-600">
+        对应 OpenAI 协议 <code className="font-mono text-zinc-500">reasoning_effort</code>；不支持的模型会忽略。
+      </p>
+    </div>
+  );
 }
 
 function ProviderFormField({

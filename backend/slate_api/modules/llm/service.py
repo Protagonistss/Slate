@@ -198,6 +198,21 @@ def sse_event(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+def _reasoning_strings_from_delta(delta: dict[str, Any]) -> list[str]:
+    """Top-level reasoning fields on delta (not content[] parts — those are handled inline)."""
+    out: list[str] = []
+
+    rc = delta.get("reasoning_content")
+    if isinstance(rc, str) and rc:
+        out.append(rc)
+
+    r = delta.get("reasoning")
+    if isinstance(r, str) and r.strip():
+        out.append(r)
+
+    return out
+
+
 def _safe_json_loads(raw: str) -> dict[str, Any]:
     try:
         return json.loads(raw)
@@ -247,6 +262,7 @@ async def stream_chat_completion(
     request: LLMChatRequest,
 ) -> AsyncIterator[str]:
     provider, model = resolve_provider_for_user(db, user, request.provider, request.model)
+    use_openai_protocol = getattr(provider, "protocol", "openai") == "openai"
     usage_log = LLMUsageLog(
         request_id=secrets.token_urlsafe(16),
         user_id=user.id,
@@ -271,6 +287,9 @@ async def stream_chat_completion(
     if request.tools:
         body["tools"] = format_tools_for_openai([tool.model_dump() for tool in request.tools])
         body["tool_choice"] = "auto"
+
+    if use_openai_protocol and request.reasoning_effort:
+        body["reasoning_effort"] = request.reasoning_effort
 
     pending_tool_calls: dict[int, dict[str, str]] = {}
     headers = {
@@ -320,8 +339,25 @@ async def stream_chat_completion(
                     delta = choice.get("delta") or {}
                     finish_reason = choice.get("finish_reason")
 
-                    if delta.get("content"):
-                        yield sse_event({"type": "content", "content": delta["content"]})
+                    content = delta.get("content")
+                    if isinstance(content, str) and content:
+                        yield sse_event({"type": "content", "content": content})
+                    elif isinstance(content, list):
+                        for part in content:
+                            if not isinstance(part, dict):
+                                continue
+                            ptype = part.get("type")
+                            if ptype == "text":
+                                text = part.get("text", "")
+                                if isinstance(text, str) and text:
+                                    yield sse_event({"type": "content", "content": text})
+                            elif ptype in ("reasoning", "thinking"):
+                                text = part.get("text") or part.get("summary") or ""
+                                if isinstance(text, str) and text:
+                                    yield sse_event({"type": "reasoning", "content": text})
+
+                    for reasoning_text in _reasoning_strings_from_delta(delta):
+                        yield sse_event({"type": "reasoning", "content": reasoning_text})
 
                     if delta.get("tool_calls"):
                         for tool_call in delta["tool_calls"]:

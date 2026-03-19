@@ -84,7 +84,9 @@ export function AgentModelSelect({ className, disabled = false }: AgentModelSele
 
     const provider = providerValue as LLMProvider;
     setCurrentProvider(provider);
+    const prev = llmConfigs[provider];
     setLLMConfig(provider, {
+      ...prev,
       provider,
       model,
     });

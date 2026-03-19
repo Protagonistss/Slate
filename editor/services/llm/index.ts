@@ -16,6 +16,7 @@ export type {
   Message,
   ToolDefinition,
   LLMConfig,
+  ReasoningEffortLevel,
   StreamChunk,
   ILLMAdapter,
   OpenAIConfig,
